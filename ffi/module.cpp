@@ -177,6 +177,76 @@ LLVMPY_ParseDbgDeclareType(LLVMValueRef I)
     return "";
 }
 
+/*
+ * Debug records are not instructions: they are attached to the
+ * instruction that follows them. These functions give access to the
+ * llvm.dbg.declare/llvm.dbg.value records attached to an instruction.
+ */
+static const llvm::DbgVariableRecord *
+getDbgVariableRecord(LLVMValueRef I, size_t idx)
+{
+    using namespace llvm;
+    auto *Inst = dyn_cast<Instruction>(unwrap<Value>(I));
+    if (!Inst)
+        return nullptr;
+    size_t n = 0;
+    for (DbgRecord &R : Inst->getDbgRecordRange()) {
+        auto *DVR = dyn_cast<DbgVariableRecord>(&R);
+        if (!DVR || !(DVR->isDbgDeclare() || DVR->isDbgValue()))
+            continue;
+        if (n++ == idx)
+            return DVR;
+    }
+    return nullptr;
+}
+
+API_EXPORT(size_t)
+LLVMPY_InstDbgRecordCount(LLVMValueRef I)
+{
+    using namespace llvm;
+    auto *Inst = dyn_cast<Instruction>(unwrap<Value>(I));
+    size_t n = 0;
+    if (Inst)
+        for (DbgRecord &R : Inst->getDbgRecordRange())
+            if (auto *DVR = dyn_cast<DbgVariableRecord>(&R))
+                if (DVR->isDbgDeclare() || DVR->isDbgValue())
+                    ++n;
+    return n;
+}
+
+/* the value (the address for declare) that the record describes, null if unknown */
+API_EXPORT(LLVMValueRef)
+LLVMPY_InstDbgRecordAddr(LLVMValueRef I, size_t idx)
+{
+    if (auto *DVR = getDbgVariableRecord(I, idx))
+        if (DVR->getNumVariableLocationOps() == 1)
+            return llvm::wrap(DVR->getVariableLocationOp(0));
+    return nullptr;
+}
+
+API_EXPORT(const char *)
+LLVMPY_InstDbgRecordVar(LLVMValueRef I, size_t idx)
+{
+    static thread_local std::string buf;
+    buf.clear();
+    if (auto *DVR = getDbgVariableRecord(I, idx))
+        if (auto *Var = DVR->getVariable())
+            buf = Var->getName().str();
+    return buf.c_str();
+}
+
+API_EXPORT(const char *)
+LLVMPY_InstDbgRecordType(LLVMValueRef I, size_t idx)
+{
+    static thread_local std::string buf;
+    buf.clear();
+    if (auto *DVR = getDbgVariableRecord(I, idx))
+        if (auto *Var = DVR->getVariable())
+            if (auto *Ty = Var->getType())
+                buf = Ty->getName().str();
+    return buf.c_str();
+}
+
 API_EXPORT(LLVMValueRef)
 LLVMPY_GetNamedFunction(LLVMModuleRef M,
                         const char *Name)

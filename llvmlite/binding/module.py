@@ -54,6 +54,23 @@ def parse_dbg_declare(inst):
             ffi.lib.LLVMPY_ParseDbgDeclareType(inst))
 
 
+def dbg_records(inst):
+    """
+    The llvm.dbg.declare and llvm.dbg.value records (written as #dbg_declare
+    in the textual IR) attached to the instruction, as a list of
+    (address or value, variable name, type name).
+    """
+    ret = []
+    for idx in range(ffi.lib.LLVMPY_InstDbgRecordCount(inst)):
+        addr = ffi.lib.LLVMPY_InstDbgRecordAddr(inst, idx)
+        if not addr:
+            continue
+        ret.append((ValueRef(addr, 'instruction', inst._parents),
+                    ffi.lib.LLVMPY_InstDbgRecordVar(inst, idx),
+                    ffi.lib.LLVMPY_InstDbgRecordType(inst, idx)))
+    return ret
+
+
 class ModuleRef(ffi.ObjectRef):
     """
     A reference to a LLVM module.
@@ -366,6 +383,18 @@ ffi.lib.LLVMPY_GetModuleName.argtypes = [ffi.LLVMModuleRef]
 ffi.lib.LLVMPY_GetModuleName.restype = c_char_p
 
 ffi.lib.LLVMPY_SetModuleName.argtypes = [ffi.LLVMModuleRef, c_char_p]
+
+ffi.lib.LLVMPY_InstDbgRecordCount.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_InstDbgRecordCount.restype = c_size_t
+
+ffi.lib.LLVMPY_InstDbgRecordAddr.argtypes = [ffi.LLVMValueRef, c_size_t]
+ffi.lib.LLVMPY_InstDbgRecordAddr.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_InstDbgRecordVar.argtypes = [ffi.LLVMValueRef, c_size_t]
+ffi.lib.LLVMPY_InstDbgRecordVar.restype = c_char_p
+
+ffi.lib.LLVMPY_InstDbgRecordType.argtypes = [ffi.LLVMValueRef, c_size_t]
+ffi.lib.LLVMPY_InstDbgRecordType.restype = c_char_p
 
 ffi.lib.LLVMPY_ParseDbgDeclareAddr.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_ParseDbgDeclareAddr.restype = ffi.LLVMValueRef
