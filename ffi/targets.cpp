@@ -1,11 +1,19 @@
 #include "core.h"
 #include "llvm-c/Target.h"
+#if LLVM_VERSION_MAJOR >= 17
+#include "llvm/TargetParser/Host.h"
+#else
 #include "llvm/Support/Host.h"
+#endif
 #include "llvm-c/TargetMachine.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#if LLVM_VERSION_MAJOR >= 17
+#include "llvm/TargetParser/Triple.h"
+#else
 #include "llvm/ADT/Triple.h"
+#endif
 #if LLVM_VERSION_MAJOR >= 14
 #include "llvm/MC/TargetRegistry.h"
 #else
@@ -16,6 +24,7 @@
 #include <cstdio>
 #include <cstring>
 #include <sstream>
+#include <optional>
 
 
 namespace llvm {
@@ -131,23 +140,39 @@ LLVMPY_OffsetOfElement(LLVMTargetDataRef TD, LLVMTypeRef Ty, int Element)
     return (long long) LLVMOffsetOfElement(TD, Ty, Element);
 }
 
+// Returns the element type of a pointer type or nullptr if the type is not
+// a pointer or it is an opaque pointer (the only pointers since LLVM 17).
+static llvm::Type *
+getPointerElementType(llvm::Type *tp)
+{
+    if (!tp->isPointerTy())
+        return nullptr;
+#if LLVM_VERSION_MAJOR < 15
+    return tp->getPointerElementType();
+#elif LLVM_VERSION_MAJOR < 17
+    if (tp->isOpaquePointerTy())
+        return nullptr;
+    return tp->getNonOpaquePointerElementType();
+#else
+    return nullptr;
+#endif
+}
+
 API_EXPORT(long long)
 LLVMPY_ABISizeOfElementType(LLVMTargetDataRef TD, LLVMTypeRef Ty)
 {
-    llvm::Type *tp = llvm::unwrap(Ty);
-    if (!tp->isPointerTy())
+    llvm::Type *tp = getPointerElementType(llvm::unwrap(Ty));
+    if (!tp)
         return -1;
-    tp = tp->getPointerElementType();
     return (long long) LLVMABISizeOfType(TD, llvm::wrap(tp));
 }
 
 API_EXPORT(long long)
 LLVMPY_ABIAlignmentOfElementType(LLVMTargetDataRef TD, LLVMTypeRef Ty)
 {
-    llvm::Type *tp = llvm::unwrap(Ty);
-    if (!tp->isPointerTy())
+    llvm::Type *tp = getPointerElementType(llvm::unwrap(Ty));
+    if (!tp)
         return -1;
-    tp = tp->getPointerElementType();
     return (long long) LLVMABIAlignmentOfType(TD, llvm::wrap(tp));
 }
 
@@ -189,20 +214,25 @@ LLVMPY_CreateTargetMachine(LLVMTargetRef T,
                            int         PrintMC)
 {
     using namespace llvm;
-    CodeGenOpt::Level cgol;
+#if LLVM_VERSION_MAJOR >= 18
+    using CGOptLevel = CodeGenOptLevel;
+#else
+    using CGOptLevel = CodeGenOpt::Level;
+#endif
+    CGOptLevel cgol;
     switch(OptLevel) {
     case 0:
-        cgol = CodeGenOpt::None;
+        cgol = CGOptLevel::None;
         break;
     case 1:
-        cgol = CodeGenOpt::Less;
+        cgol = CGOptLevel::Less;
         break;
     case 3:
-        cgol = CodeGenOpt::Aggressive;
+        cgol = CGOptLevel::Aggressive;
         break;
     case 2:
     default:
-        cgol = CodeGenOpt::Default;
+        cgol = CGOptLevel::Default;
     }
 
     CodeModel::Model cm;
@@ -226,7 +256,11 @@ LLVMPY_CreateTargetMachine(LLVMTargetRef T,
             cm = CodeModel::Large;
     }
 
+#if LLVM_VERSION_MAJOR >= 16
+    std::optional<Reloc::Model> rm;
+#else
     Optional<Reloc::Model> rm;
+#endif
     std::string rms(RelocModel);
     if (rms == "static")
         rm = Reloc::Static;

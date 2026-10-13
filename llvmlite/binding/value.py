@@ -89,7 +89,11 @@ class TypeRef(ffi.ObjectRef):
         """
         if not (self.is_pointer or self.is_array or self.is_vector):
             raise ValueError(f"Type {self} has no elements")
-        return TypeRef(ffi.lib.LLVMPY_GetElementType(self))
+        ty = ffi.lib.LLVMPY_GetElementType(self)
+        if not ty:
+            # opaque pointer
+            raise ValueError(f"Type {self} has no element type")
+        return TypeRef(ty)
 
     @property
     def struct_num_elements(self):
@@ -380,6 +384,38 @@ class ValueRef(ffi.ObjectRef):
                         self._kind, self._parents)
 
     @property
+    def allocated_type(self):
+        """
+        The type allocated by this alloca instruction.
+        """
+        ty = ffi.lib.LLVMPY_GetAllocatedType(self)
+        if not ty:
+            raise ValueError('expected alloca instruction, got %s' % (self,))
+        return TypeRef(ty)
+
+    @property
+    def gep_source_element_type(self):
+        """
+        The source element type of this GEP instruction or constant expr.
+        """
+        ty = ffi.lib.LLVMPY_GetGEPSourceElementType(self)
+        if not ty:
+            raise ValueError('expected getelementptr, got %s' % (self,))
+        return TypeRef(ty)
+
+    @property
+    def global_value_type(self):
+        """
+        The type of the value of this global (the function type for
+        functions). Unlike the type of the global itself (which is
+        a pointer), this works also with opaque pointers.
+        """
+        ty = ffi.lib.LLVMPY_GlobalGetValueType(self)
+        if not ty:
+            raise ValueError('expected global value, got %s' % (self,))
+        return TypeRef(ty)
+
+    @property
     def ce_as_inst(self):
         """
         ConstantExpr as Instruction
@@ -558,6 +594,15 @@ ffi.lib.LLVMPY_TypeIsVector.restype = c_bool
 
 ffi.lib.LLVMPY_GetElementType.argtypes = [ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_GetElementType.restype = ffi.LLVMTypeRef
+
+ffi.lib.LLVMPY_GetAllocatedType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetAllocatedType.restype = ffi.LLVMTypeRef
+
+ffi.lib.LLVMPY_GetGEPSourceElementType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetGEPSourceElementType.restype = ffi.LLVMTypeRef
+
+ffi.lib.LLVMPY_GlobalGetValueType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GlobalGetValueType.restype = ffi.LLVMTypeRef
 
 ffi.lib.LLVMPY_GetStructNumElements.argtypes = [ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_GetStructNumElements.restype = c_uint

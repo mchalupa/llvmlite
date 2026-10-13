@@ -6,7 +6,10 @@
 
 // the following is needed for WriteGraph()
 #include "llvm/Analysis/CFGPrinter.h"
+#include "llvm/Support/GraphWriter.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Operator.h"
 
 /* An iterator around a attribute list, including the stop condition */
 struct AttributeListIterator {
@@ -486,7 +489,18 @@ LLVMPY_GetElementType(LLVMTypeRef type)
 {
     llvm::Type* unwrapped = llvm::unwrap(type);
     if (auto* ty = llvm::dyn_cast<llvm::PointerType>(unwrapped)) {
+        // opaque pointers (the only pointers since LLVM 17) have no element
+        // type, use LLVMPY_GetAllocatedType, LLVMPY_GetGEPSourceElementType
+        // or LLVMPY_GlobalGetValueType instead
+#if LLVM_VERSION_MAJOR < 15
         return llvm::wrap(ty->getElementType());
+#elif LLVM_VERSION_MAJOR < 17
+        if (!ty->isOpaque())
+            return llvm::wrap(ty->getNonOpaquePointerElementType());
+        return nullptr;
+#else
+        return nullptr;
+#endif
     }
 
     if (auto* ty = llvm::dyn_cast<llvm::ArrayType>(unwrapped)) {
@@ -508,6 +522,31 @@ LLVMPY_GetStructNumElements(LLVMTypeRef type)
         return ty->getNumElements();
     }
     return 0;
+}
+
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GetAllocatedType(LLVMValueRef Val)
+{
+    if (llvm::isa<llvm::AllocaInst>(llvm::unwrap(Val)))
+        return LLVMGetAllocatedType(Val);
+    return nullptr;
+}
+
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GetGEPSourceElementType(LLVMValueRef Val)
+{
+    // works for both GEP instructions and GEP constant expressions
+    if (llvm::isa<llvm::GEPOperator>(llvm::unwrap(Val)))
+        return LLVMGetGEPSourceElementType(Val);
+    return nullptr;
+}
+
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GlobalGetValueType(LLVMValueRef Val)
+{
+    if (llvm::isa<llvm::GlobalValue>(llvm::unwrap(Val)))
+        return LLVMGlobalGetValueType(Val);
+    return nullptr;
 }
 
 API_EXPORT(LLVMTypeRef)

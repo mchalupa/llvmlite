@@ -1,12 +1,45 @@
 #include "llvm-c/Core.h"
-#include "llvm-c/Initialization.h"
 #include "llvm-c/Target.h"
 
 #include "core.h"
 #include "llvm/Config/llvm-config.h"
 
+#if LLVM_VERSION_MAJOR >= 17
+// llvm-c/Initialization.h was removed in LLVM 17, use the C++ API instead
+#include "llvm/InitializePasses.h"
+#include "llvm/PassRegistry.h"
+#else
+#include "llvm-c/Initialization.h"
+#endif
+
 extern "C" {
 
+#if LLVM_VERSION_MAJOR >= 17
+
+#define INIT(F) \
+    API_EXPORT(void) LLVMPY_Initialize ## F() { \
+            llvm::initialize ## F (*llvm::PassRegistry::getPassRegistry()); }
+
+// ObjCARCOpts and IPA have no initializers anymore, keep them as no-ops
+#define INIT_NOOP(F) \
+    API_EXPORT(void) LLVMPY_Initialize ## F() { }
+
+INIT(Core)
+INIT(TransformUtils)
+INIT(ScalarOpts)
+INIT_NOOP(ObjCARCOpts)
+INIT(Vectorization)
+INIT(InstCombine)
+INIT(IPO)
+INIT(Analysis)
+INIT_NOOP(IPA)
+INIT(CodeGen)
+INIT(Target)
+
+#undef INIT_NOOP
+#undef INIT
+
+#else
 
 #define INIT(F) \
     API_EXPORT(void) LLVMPY_Initialize ## F() { \
@@ -26,6 +59,8 @@ INIT(CodeGen)
 INIT(Target)
 
 #undef INIT
+
+#endif // LLVM_VERSION_MAJOR >= 17
 
 API_EXPORT(void)
 LLVMPY_Shutdown(){

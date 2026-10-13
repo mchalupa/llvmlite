@@ -2,6 +2,7 @@
 #define LLVMPY_CORE_H_
 
 #include "llvm-c/Core.h"
+#include "llvm/Config/llvm-config.h"
 #include <cstring>
 #include <cstdlib>
 

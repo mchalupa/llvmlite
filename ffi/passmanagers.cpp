@@ -7,11 +7,13 @@
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include "llvm/IR/LegacyPassManager.h"
+#if LLVM_VERSION_MAJOR < 17
 #include "llvm-c/Transforms/Scalar.h"
 #include "llvm-c/Transforms/IPO.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO.h"
+#endif
 
 using namespace llvm;
 
@@ -64,6 +66,84 @@ LLVMPY_FinalizeFunctionPassManager(LLVMPassManagerRef FPM)
 {
     return LLVMFinalizeFunctionPassManager(FPM);
 }
+
+#if LLVM_VERSION_MAJOR >= 17
+
+// The legacy optimization passes and their C API were removed in LLVM 17.
+// Keep the functions so that the Python bindings load, but do not add
+// any passes.
+
+API_EXPORT(void)
+LLVMPY_AddConstantMergePass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddDeadArgEliminationPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddFunctionAttrsPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddFunctionInliningPass(LLVMPassManagerRef PM, int Threshold)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddGlobalOptimizerPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddGlobalDCEPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddIPSCCPPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddCFGSimplificationPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddGVNPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddInstructionCombiningPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddLICMPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddSCCPPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddTypeBasedAliasAnalysisPass(LLVMPassManagerRef PM)
+{
+}
+
+API_EXPORT(void)
+LLVMPY_AddBasicAliasAnalysisPass(LLVMPassManagerRef PM)
+{
+}
+
+#else
 
 API_EXPORT(void)
 LLVMPY_AddConstantMergePass(LLVMPassManagerRef PM)
@@ -164,5 +244,7 @@ LLVMPY_AddBasicAliasAnalysisPass(LLVMPassManagerRef PM)
 {
     LLVMAddBasicAliasAnalysisPass(PM);
 }
+
+#endif // LLVM_VERSION_MAJOR >= 17
 
 } // end extern "C"
