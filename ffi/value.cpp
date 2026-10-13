@@ -8,6 +8,7 @@
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Operator.h"
 

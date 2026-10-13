@@ -109,9 +109,9 @@ def main_posix(kind, library_ext):
 
     out = out.decode('latin1')
     major = int(out.split('.')[0])
-    if not (7 <= major <= 18):
+    if not (7 <= major <= 22):
         msg = (
-            "Building llvmlite requires LLVM 7-18. Be sure to "
+            "Building llvmlite requires LLVM 7-22. Be sure to "
             "set LLVM_CONFIG to the right executable path.\n"
             "Read the documentation at http://llvmlite.pydata.org/ for more "
             "information about building llvmlite.\n"
@@ -126,7 +126,7 @@ def main_posix(kind, library_ext):
     cxxflags = run_llvm_config(llvm_config, ["--cxxflags"])
     # on OSX cxxflags has null bytes at the end of the string, remove them
     cxxflags = cxxflags.replace('\0', '')
-    cxxflags = cxxflags.split() + ['-fno-rtti', '-g']
+    cxxflags = cxxflags.split() + ['-fno-rtti', '-g', '-fPIC']
 
     # look for SVML
     include_dir = run_llvm_config(llvm_config, ['--includedir']).strip()

@@ -19,6 +19,7 @@ from distutils import log
 from distutils.dir_util import remove_tree
 from distutils.spawn import spawn
 import os
+import subprocess
 import sys
 import shutil
 
@@ -46,7 +47,8 @@ def build_library_files(dry_run, pic=False):
     cmd = [sys.executable, os.path.join(here_dir, 'ffi', 'build.py')]
     if pic:
         os.environ['CXXFLAGS'] = os.environ.get('CXXFLAGS', '') + ' -fPIC'
-    spawn(cmd, dry_run=dry_run)
+    if not dry_run:
+        subprocess.check_call(cmd)
 
 
 class LlvmliteBuild(build):

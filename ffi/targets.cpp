@@ -66,9 +66,14 @@ LLVMPY_GetProcessTriple(const char **Out) {
  */
 API_EXPORT(int)
 LLVMPY_GetHostCPUFeatures(const char **Out){
-    llvm::StringMap<bool> features;
     std::ostringstream buf;
+#if LLVM_VERSION_MAJOR >= 19
+    llvm::StringMap<bool> features = llvm::sys::getHostCPUFeatures();
+    {
+#else
+    llvm::StringMap<bool> features;
     if ( llvm::sys::getHostCPUFeatures(features) ) {
+#endif
         for (auto &F : features) {
             if (buf.tellp()){
                 buf << ',';
@@ -275,8 +280,13 @@ LLVMPY_CreateTargetMachine(LLVMTargetRef T,
     opt.PrintMachineCode = PrintMC;
 #endif
 
+#if LLVM_VERSION_MAJOR >= 21
+    return wrap(unwrap(T)->createTargetMachine(llvm::Triple(Triple), CPU,
+                                               Features, opt, rm, cm, cgol));
+#else
     return wrap(unwrap(T)->createTargetMachine(Triple, CPU, Features, opt,
                                                rm, cm, cgol));
+#endif
 }
 
 
