@@ -366,6 +366,20 @@ class ValueRef(ffi.ObjectRef):
         return _OperandsIterator(it, parents)
 
     @property
+    def constant_operands(self):
+        """
+        Return an iterator over the operands of a constant that is a user
+        (e.g. the elements of a constant struct/array initializer).
+        """
+        if self.is_instruction or self.is_function or self.is_block \
+                or self.is_argument:
+            raise ValueError('expected a constant value, got %s'
+                             % (self._kind,))
+        it = ffi.lib.LLVMPY_InstructionOperandsIter(self)
+        parents = self._parents.copy()
+        return _OperandsIterator(it, parents)
+
+    @property
     def opcode(self):
         if not self.is_instruction:
             raise ValueError('expected instruction value, got %s'

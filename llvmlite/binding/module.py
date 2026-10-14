@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import
 from ctypes import (c_char_p, byref, POINTER, c_bool, create_string_buffer,
-                    c_size_t, string_at)
+                    c_size_t, c_uint, string_at)
 
 from . import ffi
 from .linker import link_modules
@@ -138,6 +138,15 @@ class ModuleRef(ffi.ObjectRef):
         Get the size of type in bits
         """
         return ffi.lib.LLVMPY_TypeSize(self, ty)
+
+    def get_struct_element_offset(self, ty, idx):
+        """
+        Get the offset (in bytes) of the idx-th element of the struct type,
+        including the padding.
+        """
+        if not ty.is_struct:
+            raise ValueError('expected a struct type, got %s' % (ty,))
+        return ffi.lib.LLVMPY_StructElementOffset(self, ty, idx)
 
     def get_type_store_size(self, ty):
         """
@@ -345,6 +354,9 @@ ffi.lib.LLVMPY_GetNamedGlobalVariable.restype = ffi.LLVMValueRef
 
 ffi.lib.LLVMPY_TypeSize.argtypes = [ffi.LLVMModuleRef, ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_TypeSize.restype = c_size_t
+ffi.lib.LLVMPY_StructElementOffset.argtypes = [ffi.LLVMModuleRef,
+                                               ffi.LLVMTypeRef, c_uint]
+ffi.lib.LLVMPY_StructElementOffset.restype = c_size_t
 
 ffi.lib.LLVMPY_TypeStoreSize.argtypes = [ffi.LLVMModuleRef, ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_TypeStoreSize.restype = c_size_t

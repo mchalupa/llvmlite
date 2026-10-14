@@ -251,9 +251,10 @@ API_EXPORT(LLVMOperandsIteratorRef)
 LLVMPY_InstructionOperandsIter(LLVMValueRef I)
 {
     using namespace llvm;
-    Instruction* inst = unwrap<Instruction>(I);
-    return wrap(new OperandsIterator(inst->op_begin(),
-                                inst->op_end()));
+    // works for instructions as well as for constants (e.g. aggregates)
+    User* user = cast<User>(unwrap<Value>(I));
+    return wrap(new OperandsIterator(user->op_begin(),
+                                user->op_end()));
 }
 
 API_EXPORT(const char *)

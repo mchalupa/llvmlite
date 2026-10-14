@@ -270,6 +270,14 @@ LLVMPY_TypeSize(LLVMModuleRef mod, LLVMTypeRef type)
 }
 
 API_EXPORT(size_t)
+LLVMPY_StructElementOffset(LLVMModuleRef mod, LLVMTypeRef type, unsigned idx)
+{
+    llvm::Module *m = llvm::unwrap(mod);
+    llvm::StructType *st = llvm::cast<llvm::StructType>(llvm::unwrap(type));
+    return m->getDataLayout().getStructLayout(st)->getElementOffset(idx);
+}
+
+API_EXPORT(size_t)
 LLVMPY_TypeStoreSize(LLVMModuleRef mod, LLVMTypeRef type)
 {
     llvm::Module *m = llvm::unwrap(mod);
