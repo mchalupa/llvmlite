@@ -240,6 +240,11 @@ _FP_KINDS = {0: 'half', 1: 'bfloat', 2: 'float', 3: 'double', 4: 'x86_fp80',
 _FP_BITS = {0: 16, 1: 16, 2: 32, 3: 64, 4: 80, 5: 128, 6: 128}
 
 
+# the names of the opcodes of instructions (filled on demand, the numbering
+# depends on the version of LLVM)
+_OPCODE_NAMES = {}
+
+
 class ValueRef(ffi.ObjectRef):
     """A weak reference to a LLVM value.
     """
@@ -752,10 +757,43 @@ class ValueRef(ffi.ObjectRef):
 
     @property
     def opcode(self):
+        """
+        The name of the opcode of this instruction ('add', 'load', ...).
+        Raises ValueError for other values.
+        """
         if not self.is_instruction:
             raise ValueError('expected instruction value, got %s'
                              % (self._kind,))
-        return ffi.ret_string(ffi.lib.LLVMPY_GetOpcodeName(self))
+        op = ffi.lib.LLVMPY_GetInstructionOpcode(self)
+        try:
+            return _OPCODE_NAMES[op]
+        except KeyError:
+            if op < 0:
+                raise ValueError('expected instruction value')
+            name = _OPCODE_NAMES[op] = \
+                ffi.ret_string(ffi.lib.LLVMPY_GetOpcodeName(self))
+            return name
+
+    @property
+    def operand_list(self):
+        """
+        The list of the operands of this instruction or constant (the same
+        values as `operands` or `constant_operands` give, in one call).
+        Raises ValueError for other values.
+        """
+        n = ffi.lib.LLVMPY_GetNumOperands(self)
+        if n < 0 or self.is_function or self.is_block or self.is_argument:
+            raise ValueError('expected an instruction or a constant, got %s'
+                             % (self._kind,))
+        if n == 0:
+            return []
+        ops = (ffi.LLVMValueRef * n)()
+        ffi.lib.LLVMPY_GetOperands(self, ops)
+        parents = self._parents
+        if self.is_instruction:
+            parents = parents.copy()
+            parents.update(instruction=self)
+        return [ValueRef(op, 'operand', parents) for op in ops]
 
     @property
     def initializer(self):
@@ -1179,6 +1217,15 @@ ffi.lib.LLVMPY_ArgHasAttribute.restype = c_int
 
 ffi.lib.LLVMPY_GetInlineAsmString.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetInlineAsmString.restype = c_void_p
+
+ffi.lib.LLVMPY_GetInstructionOpcode.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetInstructionOpcode.restype = c_int
+
+ffi.lib.LLVMPY_GetNumOperands.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetNumOperands.restype = c_int
+
+ffi.lib.LLVMPY_GetOperands.argtypes = [ffi.LLVMValueRef,
+                                       POINTER(ffi.LLVMValueRef)]
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

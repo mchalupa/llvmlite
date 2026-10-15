@@ -528,3 +528,51 @@ class TestInlineAsm(TestCase):
         self.assertEqual(asm.inline_asm_string, 'mov $1, $0\n\tnop')
         with self.assertRaises(ValueError):
             list(i[1].operands)[-1].inline_asm_string
+
+
+class TestOpcodesOperands(TestCase):
+    ir = r"""
+    @g = global [2 x i32] [i32 1, i32 2]
+    @s = global { i32, ptr } { i32 3, ptr @g }
+    define i32 @f(i32 %a, ptr %p) {
+      %x = add i32 %a, 1
+      %y = load i32, ptr %p
+      store i32 %y, ptr getelementptr (i8, ptr @g, i64 4)
+      %c = icmp eq i32 %x, %y
+      br i1 %c, label %t, label %e
+    t:
+      %r = phi i32 [ %x, %0 ], [ 0, %e ]
+      ret i32 %r
+    e:
+      br label %t
+    }
+    """
+
+    def test_opcode(self):
+        mod = llvm.parse_assembly(self.ir)
+        i = _insts(mod, 'f')
+        self.assertEqual([x.opcode for x in i],
+                         ['add', 'load', 'store', 'icmp', 'br', 'phi', 'ret',
+                          'br'])
+        # (the second time from the cache)
+        self.assertEqual([x.opcode for x in i],
+                         ['add', 'load', 'store', 'icmp', 'br', 'phi', 'ret',
+                          'br'])
+        with self.assertRaises(ValueError):
+            mod.get_function('f').opcode
+
+    def test_operand_list(self):
+        mod = llvm.parse_assembly(self.ir)
+        for i in _insts(mod, 'f'):
+            self.assertEqual(i.operand_list, list(i.operands))
+            self.assertTrue(all(o.is_operand for o in i.operand_list))
+        for g in ('g', 's'):
+            init = mod.get_global_variable(g).initializer
+            self.assertEqual(init.operand_list, list(init.constant_operands))
+        i = _insts(mod, 'f')
+        self.assertEqual(len(i[0].operand_list), 2)
+        self.assertEqual(i[0].operand_list[0].name, 'a')
+        self.assertEqual(i[6].operand_list[0], i[5])
+        self.assertEqual(i[2].operand_list[1].value_kind, 'constant_expr')
+        with self.assertRaises(ValueError):
+            mod.get_function('f').operand_list

@@ -1005,6 +1005,40 @@ LLVMPY_GetInlineAsmString(LLVMValueRef V)
     return nullptr;
 }
 
+/* The opcode of an instruction (llvm::Instruction::getOpcode(), the
+ * numbering depends on the version of LLVM), -1 for other values. */
+API_EXPORT(int)
+LLVMPY_GetInstructionOpcode(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *I = dyn_cast<Instruction>(unwrap<Value>(V)))
+        return I->getOpcode();
+    return -1;
+}
+
+/* The number of operands of a user (an instruction or a constant), -1 for
+ * other values. */
+API_EXPORT(int)
+LLVMPY_GetNumOperands(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *U = dyn_cast<User>(unwrap<Value>(V)))
+        return U->getNumOperands();
+    return -1;
+}
+
+/* Store the operands of a user (an instruction or a constant) to Out, that
+ * must have the space for LLVMPY_GetNumOperands(V) values. */
+API_EXPORT(void)
+LLVMPY_GetOperands(LLVMValueRef V, LLVMValueRef *Out)
+{
+    using namespace llvm;
+    auto *U = cast<User>(unwrap<Value>(V));
+    unsigned i = 0;
+    for (const Use &Op : U->operands())
+        Out[i++] = wrap(Op.get());
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {
