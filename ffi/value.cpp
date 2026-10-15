@@ -628,6 +628,27 @@ LLVMPY_IsConstant(LLVMValueRef V)
 }
 
 
+/* Alignment (in bytes) of a load, store, alloca or global object.
+ * Returns 0 for a global object without explicit alignment and -1 for values
+ * that have no alignment. */
+API_EXPORT(int)
+LLVMPY_GetAlignment(LLVMValueRef V)
+{
+    using namespace llvm;
+    Value *Val = unwrap<Value>(V);
+    if (auto *LI = dyn_cast<LoadInst>(Val))
+        return LI->getAlign().value();
+    if (auto *SI = dyn_cast<StoreInst>(Val))
+        return SI->getAlign().value();
+    if (auto *AI = dyn_cast<AllocaInst>(Val))
+        return AI->getAlign().value();
+    if (auto *GV = dyn_cast<GlobalVariable>(Val))
+        return GV->getAlign() ? GV->getAlign()->value() : 0;
+    if (auto *F = dyn_cast<Function>(Val))
+        return F->getAlign() ? F->getAlign()->value() : 0;
+    return -1;
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {

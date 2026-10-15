@@ -380,6 +380,19 @@ class ValueRef(ffi.ObjectRef):
         return _OperandsIterator(it, parents)
 
     @property
+    def alignment(self):
+        """
+        The alignment (in bytes) of this load, store or alloca instruction or
+        global object. None for a global object without explicit alignment.
+        Raises ValueError for any other value.
+        """
+        al = ffi.lib.LLVMPY_GetAlignment(self)
+        if al < 0:
+            raise ValueError('value has no alignment (expected load, store, '
+                             'alloca or global object), got %s' % (self._kind,))
+        return al if al > 0 else None
+
+    @property
     def opcode(self):
         if not self.is_instruction:
             raise ValueError('expected instruction value, got %s'
@@ -719,6 +732,9 @@ ffi.lib.LLVMPY_InstructionsIterNext.restype = ffi.LLVMValueRef
 
 ffi.lib.LLVMPY_OperandsIterNext.argtypes = [ffi.LLVMOperandsIterator]
 ffi.lib.LLVMPY_OperandsIterNext.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_GetAlignment.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetAlignment.restype = c_int
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p
