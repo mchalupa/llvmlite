@@ -639,6 +639,47 @@ class ValueRef(ffi.ObjectRef):
         return [idxs[i] for i in range(n)]
 
     @property
+    def switch_default(self):
+        """
+        The default destination block of a switch instruction. Raises
+        ValueError for other values.
+        """
+        if ffi.lib.LLVMPY_SwitchNumCases(self) < 0:
+            raise ValueError('expected a switch instruction, got %s'
+                             % (self._kind,))
+        return ValueRef(ffi.lib.LLVMPY_SwitchDefaultDest(self), 'block',
+                        self._parents)
+
+    @property
+    def switch_cases(self):
+        """
+        The cases of a switch instruction (without the default one) as
+        a list of pairs (value, destination block), where the value is
+        a constant integer. Raises ValueError for other values.
+        """
+        n = ffi.lib.LLVMPY_SwitchNumCases(self)
+        if n < 0:
+            raise ValueError('expected a switch instruction, got %s'
+                             % (self._kind,))
+        parents = self._parents.copy()
+        parents.update(instruction=self)
+        return [(ValueRef(ffi.lib.LLVMPY_SwitchCaseValue(self, i), 'operand',
+                          parents),
+                 ValueRef(ffi.lib.LLVMPY_SwitchCaseDest(self, i), 'block',
+                          self._parents))
+                for i in range(n)]
+
+    def strip_pointer_casts(self):
+        """
+        The value with the pointer casts (bitcasts, address space casts,
+        GEPs with zero indices; instructions and constant expressions)
+        stripped, the value itself if there are none.
+        """
+        ret = ValueRef(ffi.lib.LLVMPY_StripPointerCasts(self), 'operand',
+                       self._parents)
+        return self if ret == self else ret
+
+    @property
     def opcode(self):
         if not self.is_instruction:
             raise ValueError('expected instruction value, got %s'
@@ -1033,6 +1074,21 @@ ffi.lib.LLVMPY_GetNumAggregateIndices.restype = c_int
 
 ffi.lib.LLVMPY_GetAggregateIndices.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetAggregateIndices.restype = POINTER(c_uint)
+
+ffi.lib.LLVMPY_SwitchNumCases.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_SwitchNumCases.restype = c_int
+
+ffi.lib.LLVMPY_SwitchCaseValue.argtypes = [ffi.LLVMValueRef, c_uint]
+ffi.lib.LLVMPY_SwitchCaseValue.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_SwitchCaseDest.argtypes = [ffi.LLVMValueRef, c_uint]
+ffi.lib.LLVMPY_SwitchCaseDest.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_SwitchDefaultDest.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_SwitchDefaultDest.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_StripPointerCasts.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_StripPointerCasts.restype = ffi.LLVMValueRef
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

@@ -873,6 +873,55 @@ LLVMPY_GetAggregateIndices(LLVMValueRef V)
     return nullptr;
 }
 
+/* The number of cases (without the default one) of a switch instruction, -1
+ * for other values. */
+API_EXPORT(int)
+LLVMPY_SwitchNumCases(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *SI = dyn_cast<SwitchInst>(unwrap<Value>(V)))
+        return SI->getNumCases();
+    return -1;
+}
+
+/* The value (a ConstantInt) of the case Idx of a switch instruction. */
+API_EXPORT(LLVMValueRef)
+LLVMPY_SwitchCaseValue(LLVMValueRef V, unsigned Idx)
+{
+    using namespace llvm;
+    auto *SI = cast<SwitchInst>(unwrap<Value>(V));
+    assert(Idx < SI->getNumCases() && "Invalid case index");
+    return wrap((SI->case_begin() + Idx)->getCaseValue());
+}
+
+/* The destination block of the case Idx of a switch instruction. */
+API_EXPORT(LLVMValueRef)
+LLVMPY_SwitchCaseDest(LLVMValueRef V, unsigned Idx)
+{
+    using namespace llvm;
+    auto *SI = cast<SwitchInst>(unwrap<Value>(V));
+    assert(Idx < SI->getNumCases() && "Invalid case index");
+    return wrap(static_cast<Value *>((SI->case_begin() + Idx)->getCaseSuccessor()));
+}
+
+/* The default destination block of a switch instruction. */
+API_EXPORT(LLVMValueRef)
+LLVMPY_SwitchDefaultDest(LLVMValueRef V)
+{
+    using namespace llvm;
+    auto *SI = cast<SwitchInst>(unwrap<Value>(V));
+    return wrap(static_cast<Value *>(SI->getDefaultDest()));
+}
+
+/* The value with the pointer casts (bitcast, addrspacecast, zero GEPs)
+ * stripped (Value::stripPointerCasts; the value itself if there is none). */
+API_EXPORT(LLVMValueRef)
+LLVMPY_StripPointerCasts(LLVMValueRef V)
+{
+    using namespace llvm;
+    return wrap(unwrap<Value>(V)->stripPointerCasts());
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {

@@ -387,3 +387,65 @@ class TestConstantData(TestCase):
         self.assertEqual(i[1].aggregate_indices, [1, 0])
         with self.assertRaises(ValueError):
             i[2].aggregate_indices
+
+
+class TestSwitchAndCallee(TestCase):
+    ir = r"""
+    @g = global i32 0
+    @ga = alias i32, ptr @g
+    declare void @ext()
+    define i32 @f(i64 %x, ptr %fp) {
+    entry:
+      switch i64 %x, label %d [ i64 -1, label %a
+                                i64 7, label %b
+                                i64 9223372036854775807, label %a ]
+    a:
+      call void @ext()
+      call void %fp()
+      call addrspace(1) void addrspacecast (ptr @ext to ptr addrspace(1))()
+      ret i32 1
+    b:
+      ret i32 2
+    d:
+      switch i128 0, label %b [ i128 170141183460469231731687303715884105727, label %a ]
+    }
+    """
+
+    def test_switch(self):
+        mod = llvm.parse_assembly(self.ir)
+        mod.verify()
+        f = mod.get_function('f')
+        blocks = list(f.blocks)
+        sw = list(blocks[0].instructions)[0]
+        self.assertEqual(sw.opcode, 'switch')
+        self.assertEqual(sw.switch_default, blocks[3])
+        cases = sw.switch_cases
+        self.assertEqual([v.constant_int for v, _ in cases],
+                         [(64, -1), (64, 7), (64, 2 ** 63 - 1)])
+        self.assertEqual([b for _, b in cases],
+                         [blocks[1], blocks[2], blocks[1]])
+        self.assertTrue(all(b.is_block for _, b in cases))
+        sw2 = list(blocks[3].instructions)[0]
+        self.assertEqual(sw2.switch_default, blocks[2])
+        self.assertEqual([(v.constant_int, b) for v, b in sw2.switch_cases],
+                         [((128, 2 ** 127 - 1), blocks[1])])
+        with self.assertRaises(ValueError):
+            list(blocks[1].instructions)[0].switch_cases
+        with self.assertRaises(ValueError):
+            list(blocks[1].instructions)[0].switch_default
+
+    def test_strip_pointer_casts(self):
+        mod = llvm.parse_assembly(self.ir)
+        calls = list(list(mod.get_function('f').blocks)[1].instructions)[:3]
+        callees = [list(c.operands)[-1] for c in calls]
+        self.assertEqual(callees[0].strip_pointer_casts().value_kind,
+                         'function')
+        self.assertIs(callees[0].strip_pointer_casts(), callees[0])
+        self.assertEqual(callees[1].strip_pointer_casts().value_kind,
+                         'argument')
+        self.assertEqual(callees[2].value_kind, 'constant_expr')
+        s = callees[2].strip_pointer_casts()
+        self.assertEqual(s.value_kind, 'function')
+        self.assertEqual(s.name, 'ext')
+        ga = list(mod.global_variables)
+        self.assertEqual(ga[0].strip_pointer_casts(), ga[0])
