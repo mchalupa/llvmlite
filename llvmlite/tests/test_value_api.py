@@ -508,3 +508,23 @@ class TestDbgAtomicsArgs(TestCase):
             args[0].has_attribute('no-such-attribute')
         with self.assertRaises(ValueError):
             _insts(mod, 'f')[0].byval_type
+
+
+class TestInlineAsm(TestCase):
+    ir = r"""
+    declare void @g()
+    define i32 @f(i32 %x) {
+      %r = call i32 asm sideeffect "mov $1, $0\0A\09nop", "=r,r"(i32 %x)
+      call void @g()
+      ret i32 %r
+    }
+    """
+
+    def test_inline_asm_string(self):
+        mod = llvm.parse_assembly(self.ir)
+        i = _insts(mod, 'f')
+        asm = list(i[0].operands)[-1]
+        self.assertEqual(asm.value_kind, 'inline_asm')
+        self.assertEqual(asm.inline_asm_string, 'mov $1, $0\n\tnop')
+        with self.assertRaises(ValueError):
+            list(i[1].operands)[-1].inline_asm_string

@@ -739,6 +739,18 @@ class ValueRef(ffi.ObjectRef):
         return bool(r)
 
     @property
+    def inline_asm_string(self):
+        """
+        The assembly string (template) of an inline assembly value. Raises
+        ValueError for other values.
+        """
+        ptr = ffi.lib.LLVMPY_GetInlineAsmString(self)
+        if not ptr:
+            raise ValueError('expected inline assembly, got %s'
+                             % (self._kind,))
+        return ffi.ret_string(ptr)
+
+    @property
     def opcode(self):
         if not self.is_instruction:
             raise ValueError('expected instruction value, got %s'
@@ -1164,6 +1176,9 @@ ffi.lib.LLVMPY_GetArgByValType.restype = ffi.LLVMTypeRef
 
 ffi.lib.LLVMPY_ArgHasAttribute.argtypes = [ffi.LLVMValueRef, c_char_p]
 ffi.lib.LLVMPY_ArgHasAttribute.restype = c_int
+
+ffi.lib.LLVMPY_GetInlineAsmString.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetInlineAsmString.restype = c_void_p
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

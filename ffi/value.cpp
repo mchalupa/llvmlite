@@ -9,6 +9,7 @@
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Operator.h"
 
@@ -991,6 +992,17 @@ LLVMPY_ArgHasAttribute(LLVMValueRef V, const char *Name)
     if (Kind == Attribute::None)
         return -2;
     return A->hasAttribute(Kind);
+}
+
+/* The assembly string (the template) of an inline assembly value, NULL for
+ * other values. */
+API_EXPORT(const char *)
+LLVMPY_GetInlineAsmString(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *IA = dyn_cast<InlineAsm>(unwrap<Value>(V)))
+        return LLVMPY_CreateString(IA->getAsmString().str().c_str());
+    return nullptr;
 }
 
 API_EXPORT(int)
