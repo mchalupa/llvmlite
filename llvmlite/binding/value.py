@@ -333,9 +333,20 @@ class ValueRef(ffi.ObjectRef):
 
     @property
     def dbg_loc(self):
-        return (_decode_string(ffi.lib.LLVMPY_GetDbgFile(self)),
-                ffi.lib.LLVMPY_GetDbgLine(self),
-                ffi.lib.LLVMPY_GetDbgCol(self))
+        """
+        The debug location of an instruction as the triple (file, line,
+        column); ('', 0, 0) if there is none (or this is not an
+        instruction).
+        """
+        line = c_uint(0)
+        col = c_uint(0)
+        n = c_size_t(0)
+        ptr = ffi.lib.LLVMPY_GetDbgLoc(self, byref(line), byref(col),
+                                       byref(n))
+        if not ptr:
+            return ('', 0, 0)
+        return (_decode_string(string_at(ptr, n.value)), line.value,
+                col.value)
 
     @name.setter
     def name(self, val):
@@ -678,6 +689,54 @@ class ValueRef(ffi.ObjectRef):
         ret = ValueRef(ffi.lib.LLVMPY_StripPointerCasts(self), 'operand',
                        self._parents)
         return self if ret == self else ret
+
+    @property
+    def atomicrmw_operation(self):
+        """
+        The operation of an atomicrmw instruction ('xchg', 'add', 'sub',
+        'and', 'nand', 'or', 'xor', 'max', 'min', 'umax', 'umin', 'fadd',
+        ...). Raises ValueError for other values.
+        """
+        ptr = ffi.lib.LLVMPY_GetAtomicRMWOperation(self)
+        if not ptr:
+            raise ValueError('expected an atomicrmw instruction, got %s'
+                             % (self._kind,))
+        return ffi.ret_string(ptr)
+
+    @property
+    def is_weak(self):
+        """
+        Is this cmpxchg instruction weak? Raises ValueError for other values.
+        """
+        r = ffi.lib.LLVMPY_IsWeakCmpXchg(self)
+        if r < 0:
+            raise ValueError('expected a cmpxchg instruction, got %s'
+                             % (self._kind,))
+        return bool(r)
+
+    @property
+    def byval_type(self):
+        """
+        The type of a 'byval' argument, None for other arguments. Raises
+        ValueError for values that are not arguments.
+        """
+        if not self.is_argument:
+            raise ValueError('expected an argument, got %s' % (self._kind,))
+        ty = ffi.lib.LLVMPY_GetArgByValType(self)
+        return TypeRef(ty) if ty else None
+
+    def has_attribute(self, name):
+        """
+        Does this argument have the (enum or type) attribute 'name' (e.g.
+        'byval', 'inalloca', 'noundef')? Raises ValueError for values that
+        are not arguments and names that are not of enum or type attributes.
+        """
+        r = ffi.lib.LLVMPY_ArgHasAttribute(self, _encode_string(name))
+        if r == -1:
+            raise ValueError('expected an argument, got %s' % (self._kind,))
+        if r == -2:
+            raise ValueError('unknown attribute: %s' % (name,))
+        return bool(r)
 
     @property
     def opcode(self):
@@ -1089,6 +1148,22 @@ ffi.lib.LLVMPY_SwitchDefaultDest.restype = ffi.LLVMValueRef
 
 ffi.lib.LLVMPY_StripPointerCasts.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_StripPointerCasts.restype = ffi.LLVMValueRef
+
+ffi.lib.LLVMPY_GetDbgLoc.argtypes = [ffi.LLVMValueRef, POINTER(c_uint),
+                                    POINTER(c_uint), POINTER(c_size_t)]
+ffi.lib.LLVMPY_GetDbgLoc.restype = c_void_p
+
+ffi.lib.LLVMPY_GetAtomicRMWOperation.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetAtomicRMWOperation.restype = c_void_p
+
+ffi.lib.LLVMPY_IsWeakCmpXchg.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_IsWeakCmpXchg.restype = c_int
+
+ffi.lib.LLVMPY_GetArgByValType.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetArgByValType.restype = ffi.LLVMTypeRef
+
+ffi.lib.LLVMPY_ArgHasAttribute.argtypes = [ffi.LLVMValueRef, c_char_p]
+ffi.lib.LLVMPY_ArgHasAttribute.restype = c_int
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

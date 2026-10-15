@@ -422,6 +422,29 @@ LLVMPY_GetDbgCol(LLVMValueRef Val)
 }
 
 
+/* The debug location of an instruction: *Line and *Col are set (0 if the
+ * instruction has no location) and the name of the file is returned (not
+ * null-terminated, owned by the module, *FileLen is set to its length; NULL
+ * if there is no location). */
+API_EXPORT(const char *)
+LLVMPY_GetDbgLoc(LLVMValueRef Val, unsigned *Line, unsigned *Col,
+                 size_t *FileLen)
+{
+    using namespace llvm;
+    *Line = *Col = 0;
+    *FileLen = 0;
+    if (auto *I = dyn_cast<Instruction>(unwrap<Value>(Val))) {
+        if (auto &D = I->getDebugLoc()) {
+            *Line = D.getLine();
+            *Col = D.getCol();
+            StringRef File = D.get()->getFilename();
+            *FileLen = File.size();
+            return File.data();
+        }
+    }
+    return nullptr;
+}
+
 API_EXPORT(void)
 LLVMPY_SetValueName(LLVMValueRef Val, const char *Name)
 {
@@ -920,6 +943,54 @@ LLVMPY_StripPointerCasts(LLVMValueRef V)
 {
     using namespace llvm;
     return wrap(unwrap<Value>(V)->stripPointerCasts());
+}
+
+/* The name of the operation of an atomicrmw instruction ("xchg", "add",
+ * ...), NULL for other values. */
+API_EXPORT(const char *)
+LLVMPY_GetAtomicRMWOperation(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *RMW = dyn_cast<AtomicRMWInst>(unwrap<Value>(V)))
+        return LLVMPY_CreateString(
+            AtomicRMWInst::getOperationName(RMW->getOperation()).str().c_str());
+    return nullptr;
+}
+
+/* Is the cmpxchg instruction weak? -1 for other values. */
+API_EXPORT(int)
+LLVMPY_IsWeakCmpXchg(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *CX = dyn_cast<AtomicCmpXchgInst>(unwrap<Value>(V)))
+        return CX->isWeak();
+    return -1;
+}
+
+/* The type of a byval argument, NULL for other arguments (and values). */
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GetArgByValType(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *A = dyn_cast<Argument>(unwrap<Value>(V)))
+        return wrap(A->getParamByValType());
+    return nullptr;
+}
+
+/* Does the argument have the (enum or type) attribute of the given name?
+ * -1 if V is not an argument, -2 if the name is not of an enum or type
+ * attribute. */
+API_EXPORT(int)
+LLVMPY_ArgHasAttribute(LLVMValueRef V, const char *Name)
+{
+    using namespace llvm;
+    auto *A = dyn_cast<Argument>(unwrap<Value>(V));
+    if (!A)
+        return -1;
+    Attribute::AttrKind Kind = Attribute::getAttrKindFromName(Name);
+    if (Kind == Attribute::None)
+        return -2;
+    return A->hasAttribute(Kind);
 }
 
 API_EXPORT(int)

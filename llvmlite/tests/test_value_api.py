@@ -449,3 +449,62 @@ class TestSwitchAndCallee(TestCase):
         self.assertEqual(s.name, 'ext')
         ga = list(mod.global_variables)
         self.assertEqual(ga[0].strip_pointer_casts(), ga[0])
+
+
+class TestDbgAtomicsArgs(TestCase):
+    ir = r"""
+    %struct.S = type { i32, i64 }
+    define void @f(ptr byval(%struct.S) %s, ptr byval([4 x i8]) %a, ptr %p,
+                   ptr inalloca(i32) %ia) {
+      %1 = atomicrmw add ptr %p, i32 1 seq_cst, !dbg !10
+      %2 = atomicrmw volatile umax ptr %p, i32 1 monotonic
+      %3 = atomicrmw xchg ptr %p, ptr null acquire
+      %4 = cmpxchg weak ptr %p, i32 0, i32 1 seq_cst seq_cst
+      %5 = cmpxchg volatile ptr %p, i32 0, i32 1 seq_cst seq_cst
+      ret void
+    }
+    !llvm.dbg.cu = !{!0}
+    !llvm.module.flags = !{!3}
+    !0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1,
+                                 emissionKind: FullDebug)
+    !1 = !DIFile(filename: "dir/a\C3\A9.c", directory: "/tmp")
+    !3 = !{i32 2, !"Debug Info Version", i32 3}
+    !5 = distinct !DISubprogram(name: "f", scope: !1, file: !1, line: 1,
+                                type: !6, unit: !0)
+    !6 = !DISubroutineType(types: !{})
+    !10 = !DILocation(line: 7, column: 3, scope: !5)
+    """
+
+    def test_dbg_loc(self):
+        mod = llvm.parse_assembly(self.ir)
+        i = _insts(mod, 'f')
+        self.assertEqual(i[0].dbg_loc, ('dir/a\xc3\xa9.c', 7, 3))
+        self.assertEqual(i[1].dbg_loc, ('', 0, 0))
+        self.assertEqual(mod.get_function('f').dbg_loc, ('', 0, 0))
+
+    def test_atomics(self):
+        mod = llvm.parse_assembly(self.ir)
+        i = _insts(mod, 'f')
+        self.assertEqual([x.atomicrmw_operation for x in i[:3]],
+                         ['add', 'umax', 'xchg'])
+        self.assertEqual([x.is_weak for x in i[3:5]], [True, False])
+        with self.assertRaises(ValueError):
+            i[3].atomicrmw_operation
+        with self.assertRaises(ValueError):
+            i[0].is_weak
+
+    def test_args(self):
+        mod = llvm.parse_assembly(self.ir)
+        args = list(mod.get_function('f').arguments)
+        self.assertEqual(args[0].byval_type, mod.get_struct_type('struct.S'))
+        self.assertEqual(args[1].byval_type.element_count, 4)
+        self.assertIsNone(args[2].byval_type)
+        self.assertIsNone(args[3].byval_type)
+        self.assertEqual([a.has_attribute('byval') for a in args],
+                         [True, True, False, False])
+        self.assertEqual([a.has_attribute('inalloca') for a in args],
+                         [False, False, False, True])
+        with self.assertRaises(ValueError):
+            args[0].has_attribute('no-such-attribute')
+        with self.assertRaises(ValueError):
+            _insts(mod, 'f')[0].byval_type
