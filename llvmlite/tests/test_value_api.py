@@ -332,3 +332,58 @@ class TestTypes(TestCase):
         self.assertEqual(self.vt(mod, 'p1').address_space, 1)
         with self.assertRaises(ValueError):
             self.vt(mod, 'i').address_space
+
+
+class TestConstantData(TestCase):
+    ir = r"""
+    @s = global [4 x i8] c"a\00\FF\5C"
+    @a16 = global [3 x i16] [i16 1, i16 -2, i16 300]
+    @a64 = global [2 x i64] [i64 -1, i64 9223372036854775807]
+    @f = global [2 x float] [float 1.0, float -0.5]
+    @d = global [2 x double] [double 0.1, double 2.0]
+    @v = global <2 x i32> <i32 7, i32 -7>
+    @z = global [2 x i32] zeroinitializer
+    @st = global { i32, i32 } { i32 1, i32 2 }
+    define i32 @f1({ i32, { i8, [2 x i16] } } %a) {
+      %x = extractvalue { i32, { i8, [2 x i16] } } %a, 1, 1, 0
+      %y = insertvalue { i32, { i8, [2 x i16] } } %a, i8 1, 1, 0
+      %z = add i32 1, 2
+      ret i32 %z
+    }
+    """
+
+    def init(self, mod, name):
+        return mod.get_global_variable(name).initializer
+
+    def test_raw(self):
+        import struct
+        import sys
+        mod = llvm.parse_assembly(self.ir)
+        bo = '<' if sys.byteorder == 'little' else '>'
+        raw = lambda n: self.init(mod, n).constant_data_raw  # noqa
+        self.assertEqual(raw('s'), b'a\x00\xff\\')
+        self.assertEqual(struct.unpack(bo + '3h', raw('a16')), (1, -2, 300))
+        self.assertEqual(struct.unpack(bo + '2q', raw('a64')),
+                         (-1, 2 ** 63 - 1))
+        self.assertEqual(struct.unpack(bo + '2f', raw('f')), (1.0, -0.5))
+        self.assertEqual(struct.unpack(bo + '2d', raw('d')), (0.1, 2.0))
+        self.assertEqual(struct.unpack(bo + '2i', raw('v')), (7, -7))
+        for n in ('z', 'st'):
+            with self.assertRaises(ValueError):
+                raw(n)
+
+    def test_is_string(self):
+        mod = llvm.parse_assembly(self.ir)
+        self.assertTrue(self.init(mod, 's').is_constant_string)
+        for n in ('a16', 'f', 'z', 'st'):
+            self.assertFalse(self.init(mod, n).is_constant_string, n)
+
+    def test_aggregate_indices(self):
+        mod = llvm.parse_assembly(self.ir)
+        i = _insts(mod, 'f1')
+        self.assertEqual(i[0].opcode, 'extractvalue')
+        self.assertEqual(i[0].aggregate_indices, [1, 1, 0])
+        self.assertEqual(i[1].opcode, 'insertvalue')
+        self.assertEqual(i[1].aggregate_indices, [1, 0])
+        with self.assertRaises(ValueError):
+            i[2].aggregate_indices

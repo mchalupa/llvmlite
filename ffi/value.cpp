@@ -820,6 +820,59 @@ LLVMPY_GetConstantFP(LLVMValueRef V, unsigned long long *Bits, unsigned *NumBits
     return -1;
 }
 
+/* The raw bytes of the elements of a ConstantDataSequential (a constant data
+ * array or vector of i8, i16, i32, i64, half, bfloat, float or double; in the
+ * byte order of the host), *Len is set to their number. NULL if V is not
+ * a ConstantDataSequential. */
+API_EXPORT(const char *)
+LLVMPY_GetConstantDataRaw(LLVMValueRef V, size_t *Len)
+{
+    using namespace llvm;
+    auto *CDS = dyn_cast<ConstantDataSequential>(unwrap<Value>(V));
+    if (!CDS)
+        return nullptr;
+    StringRef Raw = CDS->getRawDataValues();
+    *Len = Raw.size();
+    return Raw.data();
+}
+
+/* Is V a ConstantDataSequential of i8 elements (a string)? */
+API_EXPORT(bool)
+LLVMPY_IsConstantString(LLVMValueRef V)
+{
+    using namespace llvm;
+    auto *CDS = dyn_cast<ConstantDataSequential>(unwrap<Value>(V));
+    return CDS && CDS->isString();
+}
+
+/* The number of the constant indices of an extractvalue or insertvalue
+ * instruction, -1 for other values. */
+API_EXPORT(int)
+LLVMPY_GetNumAggregateIndices(LLVMValueRef V)
+{
+    using namespace llvm;
+    Value *Val = unwrap<Value>(V);
+    if (auto *EV = dyn_cast<ExtractValueInst>(Val))
+        return EV->getNumIndices();
+    if (auto *IV = dyn_cast<InsertValueInst>(Val))
+        return IV->getNumIndices();
+    return -1;
+}
+
+/* The constant indices of an extractvalue or insertvalue instruction (owned
+ * by the instruction), NULL for other values. */
+API_EXPORT(const unsigned *)
+LLVMPY_GetAggregateIndices(LLVMValueRef V)
+{
+    using namespace llvm;
+    Value *Val = unwrap<Value>(V);
+    if (auto *EV = dyn_cast<ExtractValueInst>(Val))
+        return EV->getIndices().data();
+    if (auto *IV = dyn_cast<InsertValueInst>(Val))
+        return IV->getIndices().data();
+    return nullptr;
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {

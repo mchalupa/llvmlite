@@ -1,5 +1,5 @@
 from ctypes import (POINTER, byref, c_char_p, c_int, c_longlong, c_size_t,
-                    c_uint, c_ulonglong, c_bool, c_void_p)
+                    c_uint, c_ulonglong, c_bool, c_void_p, string_at)
 import enum
 
 from . import ffi
@@ -603,6 +603,42 @@ class ValueRef(ffi.ObjectRef):
         return _FP_KINDS[kind], bits[0] | (bits[1] << 64)
 
     @property
+    def constant_data_raw(self):
+        """
+        The raw bytes of the elements of a constant data array or vector
+        (value kinds 'constant_data_array' and 'constant_data_vector', whose
+        elements are i8, i16, i32, i64, half, bfloat, float or double), in
+        the byte order of the host. Raises ValueError for other values.
+        """
+        n = c_size_t(0)
+        ptr = ffi.lib.LLVMPY_GetConstantDataRaw(self, byref(n))
+        if not ptr:
+            raise ValueError('expected a constant data array or vector, '
+                             'got %s' % (self._kind,))
+        return string_at(ptr, n.value)
+
+    @property
+    def is_constant_string(self):
+        """
+        Is this a constant data array or vector of i8 elements (a string)?
+        """
+        return ffi.lib.LLVMPY_IsConstantString(self)
+
+    @property
+    def aggregate_indices(self):
+        """
+        The constant indices of an extractvalue or insertvalue instruction
+        as a list of ints. Raises ValueError for other values.
+        """
+        n = ffi.lib.LLVMPY_GetNumAggregateIndices(self)
+        if n < 0:
+            raise ValueError('expected extractvalue or insertvalue, got %s'
+                             % (self._kind,))
+        idxs = ffi.lib.LLVMPY_GetAggregateIndices(self)
+        assert idxs, self._kind
+        return [idxs[i] for i in range(n)]
+
+    @property
     def opcode(self):
         if not self.is_instruction:
             raise ValueError('expected instruction value, got %s'
@@ -984,6 +1020,19 @@ ffi.lib.LLVMPY_GetConstantFP.argtypes = [ffi.LLVMValueRef,
                                          POINTER(c_ulonglong),
                                          POINTER(c_uint)]
 ffi.lib.LLVMPY_GetConstantFP.restype = c_int
+
+ffi.lib.LLVMPY_GetConstantDataRaw.argtypes = [ffi.LLVMValueRef,
+                                             POINTER(c_size_t)]
+ffi.lib.LLVMPY_GetConstantDataRaw.restype = c_void_p
+
+ffi.lib.LLVMPY_IsConstantString.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_IsConstantString.restype = c_bool
+
+ffi.lib.LLVMPY_GetNumAggregateIndices.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetNumAggregateIndices.restype = c_int
+
+ffi.lib.LLVMPY_GetAggregateIndices.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetAggregateIndices.restype = POINTER(c_uint)
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p
