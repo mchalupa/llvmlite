@@ -707,6 +707,62 @@ LLVMPY_GetValueKind(LLVMValueRef V)
     }
 }
 
+/* A constant integer: returns its bit width (0 if V is not a ConstantInt).
+ * *Small is set to the sign-extended value if the width is at most 64 bits. */
+API_EXPORT(unsigned)
+LLVMPY_GetConstantInt(LLVMValueRef V, long long *Small)
+{
+    using namespace llvm;
+    auto *CI = dyn_cast<ConstantInt>(unwrap<Value>(V));
+    if (!CI)
+        return 0;
+    unsigned Width = CI->getBitWidth();
+    if (Width <= 64)
+        *Small = CI->getSExtValue();
+    return Width;
+}
+
+/* The signed decimal value of a ConstantInt of any width. */
+API_EXPORT(const char *)
+LLVMPY_GetConstantIntString(LLVMValueRef V)
+{
+    using namespace llvm;
+    auto *CI = dyn_cast<ConstantInt>(unwrap<Value>(V));
+    if (!CI)
+        return nullptr;
+    return LLVMPY_CreateString(toString(CI->getValue(), 10, true).c_str());
+}
+
+/* A floating-point constant: returns the kind of its type (see
+ * _FP_KINDS in value.py), -1 if V is not a ConstantFP or its type is not
+ * supported. Bits is set to the raw bits of the value (little endian words,
+ * at most 128 bits), *NumBits to their number. */
+API_EXPORT(int)
+LLVMPY_GetConstantFP(LLVMValueRef V, unsigned long long *Bits, unsigned *NumBits)
+{
+    using namespace llvm;
+    auto *CF = dyn_cast<ConstantFP>(unwrap<Value>(V));
+    if (!CF)
+        return -1;
+    const APFloat &F = CF->getValueAPF();
+    APInt Raw = F.bitcastToAPInt();
+    if (Raw.getBitWidth() > 128)
+        return -1;
+    Bits[0] = Bits[1] = 0;
+    for (unsigned i = 0; i < Raw.getNumWords(); ++i)
+        Bits[i] = Raw.getRawData()[i];
+    *NumBits = Raw.getBitWidth();
+    const fltSemantics &Sem = F.getSemantics();
+    if (&Sem == &APFloat::IEEEhalf()) return 0;
+    if (&Sem == &APFloat::BFloat()) return 1;
+    if (&Sem == &APFloat::IEEEsingle()) return 2;
+    if (&Sem == &APFloat::IEEEdouble()) return 3;
+    if (&Sem == &APFloat::x87DoubleExtended()) return 4;
+    if (&Sem == &APFloat::IEEEquad()) return 5;
+    if (&Sem == &APFloat::PPCDoubleDouble()) return 6;
+    return -1;
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {

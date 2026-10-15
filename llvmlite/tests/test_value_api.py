@@ -187,3 +187,64 @@ class TestValueKind(TestCase):
         self.assertEqual(list(call[0].operands)[-1].value_kind, 'inline_asm')
         self.assertEqual(list(call[1].operands)[-1].value_kind, 'function')
         self.assertEqual(list(insts[-1].operands), [])
+
+
+class TestScalarConstants(TestCase):
+    ir = r"""
+    @i1t = global i1 true
+    @i1f = global i1 false
+    @i8 = global i8 -1
+    @i32 = global i32 -2147483648
+    @i64 = global i64 -9223372036854775808
+    @i65 = global i65 36893488147419103231
+    @i128 = global i128 -170141183460469231731687303715884105728
+    @i128p = global i128 170141183460469231731687303715884105727
+    @h = global half 1.0
+    @bf = global bfloat 1.0
+    @f = global float 0x3FB99999A0000000
+    @fn = global float 0x7FF8000000000000
+    @fi = global float 0xFFF0000000000000
+    @d = global double 0.1
+    @dz = global double -0.0
+    @x = global x86_fp80 0xK3FFF8000000000000000
+    @q = global fp128 0xL00000000000000003FFF000000000000
+    @pp = global ppc_fp128 0xM3FF00000000000000000000000000000
+    """
+
+    def init(self, mod, name):
+        return mod.get_global_variable(name).initializer
+
+    def test_ints(self):
+        mod = llvm.parse_assembly(self.ir)
+        ci = lambda n: self.init(mod, n).constant_int  # noqa
+        self.assertEqual(ci('i1t'), (1, -1))
+        self.assertEqual(ci('i1f'), (1, 0))
+        self.assertEqual(ci('i8'), (8, -1))
+        self.assertEqual(ci('i32'), (32, -2 ** 31))
+        self.assertEqual(ci('i64'), (64, -2 ** 63))
+        self.assertEqual(ci('i65'), (65, -1))
+        self.assertEqual(ci('i128'), (128, -2 ** 127))
+        self.assertEqual(ci('i128p'), (128, 2 ** 127 - 1))
+        with self.assertRaises(ValueError):
+            self.init(mod, 'f').constant_int
+
+    def test_fps(self):
+        import struct
+        mod = llvm.parse_assembly(self.ir)
+        cf = lambda n: self.init(mod, n).constant_fp  # noqa
+        self.assertEqual(cf('h'), ('half', 0x3C00))
+        self.assertEqual(cf('bf'), ('bfloat', 0x3F80))
+        self.assertEqual(cf('f'), ('float',
+                                   struct.unpack('<I',
+                                                 struct.pack('<f', 0.1))[0]))
+        self.assertEqual(cf('fn'), ('float', 0x7FC00000))
+        self.assertEqual(cf('fi'), ('float', 0xFF800000))
+        self.assertEqual(cf('d'), ('double',
+                                   struct.unpack('<Q',
+                                                 struct.pack('<d', 0.1))[0]))
+        self.assertEqual(cf('dz'), ('double', 1 << 63))
+        self.assertEqual(cf('x'), ('x86_fp80', 0x3FFF8000000000000000))
+        self.assertEqual(cf('q'), ('fp128', 0x3FFF << 112))
+        self.assertEqual(cf('pp')[0], 'ppc_fp128')
+        with self.assertRaises(ValueError):
+            self.init(mod, 'i8').constant_fp

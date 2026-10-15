@@ -1,4 +1,5 @@
-from ctypes import POINTER, c_char_p, c_int, c_size_t, c_uint, c_bool, c_void_p
+from ctypes import (POINTER, byref, c_char_p, c_int, c_longlong, c_size_t,
+                    c_uint, c_ulonglong, c_bool, c_void_p)
 import enum
 
 from . import ffi
@@ -141,6 +142,12 @@ _VALUE_KINDS = {
     19: 'metadata_as_value', 20: 'inline_asm', 21: 'instruction', 22: 'poison',
     23: 'constant_target_none',
 }
+
+# the numbering of LLVMPY_GetConstantFP
+_FP_KINDS = {0: 'half', 1: 'bfloat', 2: 'float', 3: 'double', 4: 'x86_fp80',
+             5: 'fp128', 6: 'ppc_fp128'}
+_FP_BITS = {0: 16, 1: 16, 2: 32, 3: 64, 4: 80, 5: 128, 6: 128}
+
 
 class ValueRef(ffi.ObjectRef):
     """A weak reference to a LLVM value.
@@ -467,6 +474,42 @@ class ValueRef(ffi.ObjectRef):
             return _VALUE_KINDS[kind]
         except KeyError:
             raise ValueError('unknown kind of value: %s' % (kind,))
+
+    @property
+    def constant_int(self):
+        """
+        For a constant integer, the pair (bit width, value), where the value
+        is the signed value (the unsigned value would be ambiguous for
+        i1: 'true' is -1). Raises ValueError for any other value.
+        """
+        small = c_longlong(0)
+        width = ffi.lib.LLVMPY_GetConstantInt(self, byref(small))
+        if width == 0:
+            raise ValueError('expected a constant integer, got %s'
+                             % (self._kind,))
+        if width <= 64:
+            return width, small.value
+        return width, int(ffi.ret_string(
+            ffi.lib.LLVMPY_GetConstantIntString(self)))
+
+    @property
+    def constant_fp(self):
+        """
+        For a floating-point constant, the pair (type, bits), where the type
+        is one of 'half', 'bfloat', 'float', 'double', 'x86_fp80', 'fp128',
+        'ppc_fp128' and bits is the raw (IEEE, for x86_fp80 the 80-bit
+        extended format) bit pattern of the value as an unsigned integer.
+        Raises ValueError for any other value (or a type that is not
+        supported).
+        """
+        bits = (c_ulonglong * 2)()
+        nbits = c_uint(0)
+        kind = ffi.lib.LLVMPY_GetConstantFP(self, bits, byref(nbits))
+        if kind < 0:
+            raise ValueError('expected a floating-point constant, got %s'
+                             % (self._kind,))
+        assert nbits.value == _FP_BITS[kind], (kind, nbits.value)
+        return _FP_KINDS[kind], bits[0] | (bits[1] << 64)
 
     @property
     def opcode(self):
@@ -820,6 +863,18 @@ ffi.lib.LLVMPY_GetWrapFlags.restype = c_int
 
 ffi.lib.LLVMPY_GetValueKind.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetValueKind.restype = c_int
+
+ffi.lib.LLVMPY_GetConstantInt.argtypes = [ffi.LLVMValueRef,
+                                          POINTER(c_longlong)]
+ffi.lib.LLVMPY_GetConstantInt.restype = c_uint
+
+ffi.lib.LLVMPY_GetConstantIntString.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetConstantIntString.restype = c_void_p
+
+ffi.lib.LLVMPY_GetConstantFP.argtypes = [ffi.LLVMValueRef,
+                                         POINTER(c_ulonglong),
+                                         POINTER(c_uint)]
+ffi.lib.LLVMPY_GetConstantFP.restype = c_int
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p
