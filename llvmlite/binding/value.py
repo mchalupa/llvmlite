@@ -421,6 +421,29 @@ class ValueRef(ffi.ObjectRef):
         except KeyError:
             raise ValueError('unknown compare predicate %d' % pred)
 
+    def _wrap_flags(self):
+        flags = ffi.lib.LLVMPY_GetWrapFlags(self)
+        if flags < 0:
+            raise ValueError('expected add, sub, mul or shl, got %s'
+                             % (self._kind,))
+        return flags
+
+    @property
+    def has_nsw(self):
+        """
+        Does this add, sub, mul or shl have the 'nsw' (no signed wrap) flag?
+        Raises ValueError for other values.
+        """
+        return bool(self._wrap_flags() & 1)
+
+    @property
+    def has_nuw(self):
+        """
+        Does this add, sub, mul or shl have the 'nuw' (no unsigned wrap) flag?
+        Raises ValueError for other values.
+        """
+        return bool(self._wrap_flags() & 2)
+
     @property
     def opcode(self):
         if not self.is_instruction:
@@ -767,6 +790,9 @@ ffi.lib.LLVMPY_GetAlignment.restype = c_int
 
 ffi.lib.LLVMPY_GetCmpPredicate.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetCmpPredicate.restype = c_int
+
+ffi.lib.LLVMPY_GetWrapFlags.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetWrapFlags.restype = c_int
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

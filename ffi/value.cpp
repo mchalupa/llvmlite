@@ -660,6 +660,18 @@ LLVMPY_GetCmpPredicate(LLVMValueRef V)
     return -1;
 }
 
+/* The wrap flags of add, sub, mul, shl, neg: bit 0 is nsw, bit 1 is nuw.
+ * -1 if the value is not such an operation. */
+API_EXPORT(int)
+LLVMPY_GetWrapFlags(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *OBO = dyn_cast<OverflowingBinaryOperator>(unwrap<Value>(V)))
+        return (OBO->hasNoSignedWrap() ? 1 : 0) |
+               (OBO->hasNoUnsignedWrap() ? 2 : 0);
+    return -1;
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {

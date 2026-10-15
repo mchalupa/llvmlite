@@ -90,3 +90,32 @@ class TestPredicate(TestCase):
             i[-2].predicate
         with self.assertRaises(ValueError):
             i[-1].predicate
+
+
+class TestWrapFlags(TestCase):
+    def test_wrap_flags(self):
+        mod = llvm.parse_assembly(r"""
+        define void @f(i32 %a, i32 %b) {
+          %v0 = add i32 %a, %b
+          %v1 = add nsw i32 %a, %b
+          %v2 = add nuw i32 %a, %b
+          %v3 = add nuw nsw i32 %a, %b
+          %v4 = mul nsw i32 %a, %b
+          %v5 = sub nuw nsw i32 %a, %b
+          %v6 = shl nsw i32 %a, %b
+          %v7 = shl nuw i32 %a, %b
+          %v8 = and i32 %a, %b
+          ret void
+        }
+        """)
+        mod.verify()
+        i = _insts(mod, 'f')
+        self.assertEqual(
+            [(x.has_nsw, x.has_nuw) for x in i[:8]],
+            [(False, False), (True, False), (False, True), (True, True),
+             (True, False), (True, True), (True, False), (False, True)])
+        for x in i[8:]:
+            with self.assertRaises(ValueError):
+                x.has_nsw
+            with self.assertRaises(ValueError):
+                x.has_nuw
