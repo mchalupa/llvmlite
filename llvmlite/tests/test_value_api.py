@@ -53,3 +53,40 @@ class TestAlignment(TestCase):
             i[6].alignment
         with self.assertRaises(ValueError):
             i[7].alignment
+
+
+class TestPredicate(TestCase):
+    ipreds = ['eq', 'ne', 'ugt', 'uge', 'ult', 'ule', 'sgt', 'sge', 'slt',
+              'sle']
+    fpreds = ['false', 'oeq', 'ogt', 'oge', 'olt', 'ole', 'one', 'ord',
+              'uno', 'ueq', 'ugt', 'uge', 'ult', 'ule', 'une', 'true']
+
+    def test_predicates(self):
+        body = ''.join('  %%i%d = icmp %s i32 %%a, %%b\n' % (n, p)
+                       for n, p in enumerate(self.ipreds))
+        body += ''.join('  %%f%d = fcmp %s double %%x, %%y\n' % (n, p)
+                        for n, p in enumerate(self.fpreds))
+        body += '  %s = icmp samesign ult i32 %a, %b\n'.replace('%s', '%sm')
+        mod = llvm.parse_assembly(
+            'define void @f(i32 %a, i32 %b, double %x, double %y) {\n' +
+            body + '  %c = add i32 %a, %b\n  ret void\n}\n')
+        mod.verify()
+        i = _insts(mod, 'f')
+        n = len(self.ipreds)
+        for x, p in zip(i[:n], self.ipreds):
+            self.assertEqual(x.opcode, 'icmp')
+            self.assertEqual(x.predicate, p)
+            # the printed predicate is the same
+            self.assertIn(' icmp %s ' % p, str(x))
+        for x, p in zip(i[n:n + len(self.fpreds)], self.fpreds):
+            self.assertEqual(x.opcode, 'fcmp')
+            self.assertEqual(x.predicate, p)
+            self.assertIn(' fcmp %s ' % p, str(x))
+        # the samesign flag does not change the predicate
+        sm = i[n + len(self.fpreds)]
+        self.assertEqual(sm.predicate, 'ult')
+        self.assertEqual(i[-2].opcode, 'add')
+        with self.assertRaises(ValueError):
+            i[-2].predicate
+        with self.assertRaises(ValueError):
+            i[-1].predicate

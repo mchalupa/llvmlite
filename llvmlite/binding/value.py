@@ -120,6 +120,16 @@ class TypeRef(ffi.ObjectRef):
         return ffi.ret_string(ffi.lib.LLVMPY_PrintType(self))
 
 
+# llvm::CmpInst::Predicate (the numbering is part of the stable LLVM API)
+_CMP_PREDICATES = {
+    0: 'false', 1: 'oeq', 2: 'ogt', 3: 'oge', 4: 'olt', 5: 'ole', 6: 'one',
+    7: 'ord', 8: 'uno', 9: 'ueq', 10: 'ugt', 11: 'uge', 12: 'ult', 13: 'ule',
+    14: 'une', 15: 'true',
+    32: 'eq', 33: 'ne', 34: 'ugt', 35: 'uge', 36: 'ult', 37: 'ule',
+    38: 'sgt', 39: 'sge', 40: 'slt', 41: 'sle',
+}
+
+
 class ValueRef(ffi.ObjectRef):
     """A weak reference to a LLVM value.
     """
@@ -391,6 +401,25 @@ class ValueRef(ffi.ObjectRef):
             raise ValueError('value has no alignment (expected load, store, '
                              'alloca or global object), got %s' % (self._kind,))
         return al if al > 0 else None
+
+    @property
+    def predicate(self):
+        """
+        The predicate of this icmp or fcmp instruction as a string: 'eq',
+        'ne', 'ugt', 'uge', 'ult', 'ule', 'sgt', 'sge', 'slt', 'sle' for
+        icmp and 'false', 'oeq', 'ogt', 'oge', 'olt', 'ole', 'one', 'ord',
+        'uno', 'ueq', 'ugt', 'uge', 'ult', 'ule', 'une', 'true' for fcmp
+        (use `opcode` to tell the two apart).
+        Raises ValueError for any other value.
+        """
+        pred = ffi.lib.LLVMPY_GetCmpPredicate(self)
+        if pred < 0:
+            raise ValueError('expected icmp or fcmp instruction, got %s'
+                             % (self._kind,))
+        try:
+            return _CMP_PREDICATES[pred]
+        except KeyError:
+            raise ValueError('unknown compare predicate %d' % pred)
 
     @property
     def opcode(self):
@@ -735,6 +764,9 @@ ffi.lib.LLVMPY_OperandsIterNext.restype = ffi.LLVMValueRef
 
 ffi.lib.LLVMPY_GetAlignment.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetAlignment.restype = c_int
+
+ffi.lib.LLVMPY_GetCmpPredicate.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetCmpPredicate.restype = c_int
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

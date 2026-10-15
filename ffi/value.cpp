@@ -649,6 +649,17 @@ LLVMPY_GetAlignment(LLVMValueRef V)
     return -1;
 }
 
+/* The predicate of an icmp/fcmp instruction (llvm::CmpInst::Predicate), -1
+ * if the value is not a compare instruction. */
+API_EXPORT(int)
+LLVMPY_GetCmpPredicate(LLVMValueRef V)
+{
+    using namespace llvm;
+    if (auto *CI = dyn_cast<CmpInst>(unwrap<Value>(V)))
+        return static_cast<int>(CI->getPredicate());
+    return -1;
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {
