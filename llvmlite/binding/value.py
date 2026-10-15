@@ -130,6 +130,18 @@ _CMP_PREDICATES = {
 }
 
 
+# the numbering of LLVMPY_GetValueKind
+_VALUE_KINDS = {
+    0: 'argument', 1: 'basic_block', 2: 'function', 3: 'global_alias',
+    4: 'global_ifunc', 5: 'global_variable', 6: 'block_address',
+    7: 'constant_expr', 8: 'constant_array', 9: 'constant_struct',
+    10: 'constant_vector', 11: 'undef', 12: 'constant_aggregate_zero',
+    13: 'constant_data_array', 14: 'constant_data_vector', 15: 'constant_int',
+    16: 'constant_fp', 17: 'constant_pointer_null', 18: 'constant_token_none',
+    19: 'metadata_as_value', 20: 'inline_asm', 21: 'instruction', 22: 'poison',
+    23: 'constant_target_none',
+}
+
 class ValueRef(ffi.ObjectRef):
     """A weak reference to a LLVM value.
     """
@@ -443,6 +455,18 @@ class ValueRef(ffi.ObjectRef):
         Raises ValueError for other values.
         """
         return bool(self._wrap_flags() & 2)
+
+    @property
+    def value_kind(self):
+        """
+        The kind of this value (the LLVM ValueID) as a string, one of
+        _VALUE_KINDS. Raises ValueError for a kind that is not known.
+        """
+        kind = ffi.lib.LLVMPY_GetValueKind(self)
+        try:
+            return _VALUE_KINDS[kind]
+        except KeyError:
+            raise ValueError('unknown kind of value: %s' % (kind,))
 
     @property
     def opcode(self):
@@ -793,6 +817,9 @@ ffi.lib.LLVMPY_GetCmpPredicate.restype = c_int
 
 ffi.lib.LLVMPY_GetWrapFlags.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetWrapFlags.restype = c_int
+
+ffi.lib.LLVMPY_GetValueKind.argtypes = [ffi.LLVMValueRef]
+ffi.lib.LLVMPY_GetValueKind.restype = c_int
 
 ffi.lib.LLVMPY_GetOpcodeName.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetOpcodeName.restype = c_void_p

@@ -119,3 +119,71 @@ class TestWrapFlags(TestCase):
                 x.has_nsw
             with self.assertRaises(ValueError):
                 x.has_nuw
+
+
+class TestValueKind(TestCase):
+    ir = r"""
+    %S = type { i32, i8 }
+    @gu = global i32 undef
+    @gp = global i32 poison
+    @gz = global [4 x i32] zeroinitializer
+    @gi = global i32 5
+    @gf = global double 1.5
+    @gn = global ptr null
+    @ga = global [3 x i32] [i32 1, i32 2, i32 3]
+    @gs = global [4 x i8] c"abc\00"
+    @gst = global %S { i32 1, i8 2 }
+    @gv = global <2 x i32> <i32 1, i32 2>
+    @gca = global [2 x ptr] [ptr @gi, ptr null]
+    @gce = global i64 ptrtoint (ptr @gi to i64)
+    @gal = alias i32, ptr @gi
+    declare void @ext()
+    define void @f(i32 %a, ptr %p) {
+    entry:
+      %x = add i32 %a, 1
+      store i32 undef, ptr %p
+      store i32 poison, ptr %p
+      store i32 7, ptr %p
+      store double 2.5, ptr %p
+      store ptr null, ptr %p
+      store ptr @ext, ptr %p
+      call void asm sideeffect "nop", ""()
+      call void @ext()
+      ret void
+    }
+    """
+
+    def test_kinds(self):
+        mod = llvm.parse_assembly(self.ir)
+        mod.verify()
+        init = lambda n: mod.get_global_variable(n).initializer  # noqa
+        self.assertEqual(init('gu').value_kind, 'undef')
+        self.assertEqual(init('gp').value_kind, 'poison')
+        self.assertEqual(init('gz').value_kind, 'constant_aggregate_zero')
+        self.assertEqual(init('gi').value_kind, 'constant_int')
+        self.assertEqual(init('gf').value_kind, 'constant_fp')
+        self.assertEqual(init('gn').value_kind, 'constant_pointer_null')
+        self.assertEqual(init('ga').value_kind, 'constant_data_array')
+        self.assertEqual(init('gs').value_kind, 'constant_data_array')
+        self.assertEqual(init('gst').value_kind, 'constant_struct')
+        self.assertEqual(init('gv').value_kind, 'constant_data_vector')
+        self.assertEqual(init('gca').value_kind, 'constant_array')
+        self.assertEqual(init('gce').value_kind, 'constant_expr')
+        self.assertEqual(mod.get_global_variable('gi').value_kind,
+                         'global_variable')
+        f = mod.get_function('f')
+        self.assertEqual(f.value_kind, 'function')
+        self.assertEqual(mod.get_function('ext').value_kind, 'function')
+        args = list(f.arguments)
+        self.assertEqual([a.value_kind for a in args],
+                         ['argument', 'argument'])
+        insts = [i for b in f.blocks for i in b.instructions]
+        self.assertEqual(insts[0].value_kind, 'instruction')
+        stores = [i for i in insts if i.opcode == 'store']
+        self.assertEqual([list(s.operands)[0].value_kind for s in stores],
+                         ['undef', 'poison', 'constant_int', 'constant_fp',
+                          'constant_pointer_null', 'function'])
+        call = [i for i in insts if i.opcode == 'call']
+        self.assertEqual(list(call[0].operands)[-1].value_kind, 'inline_asm')
+        self.assertEqual(list(call[1].operands)[-1].value_kind, 'function')
+        self.assertEqual(list(insts[-1].operands), [])

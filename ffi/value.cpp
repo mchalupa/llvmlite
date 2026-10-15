@@ -672,6 +672,41 @@ LLVMPY_GetWrapFlags(LLVMValueRef V)
     return -1;
 }
 
+/* The kind of a value (LLVMValueKind), translated to a numbering that does not
+ * depend on the version of LLVM (see _VALUE_KINDS in value.py).
+ * -1 for a kind that we do not know. */
+API_EXPORT(int)
+LLVMPY_GetValueKind(LLVMValueRef V)
+{
+    switch (LLVMGetValueKind(V)) {
+    case LLVMArgumentValueKind: return 0;
+    case LLVMBasicBlockValueKind: return 1;
+    case LLVMFunctionValueKind: return 2;
+    case LLVMGlobalAliasValueKind: return 3;
+    case LLVMGlobalIFuncValueKind: return 4;
+    case LLVMGlobalVariableValueKind: return 5;
+    case LLVMBlockAddressValueKind: return 6;
+    case LLVMConstantExprValueKind: return 7;
+    case LLVMConstantArrayValueKind: return 8;
+    case LLVMConstantStructValueKind: return 9;
+    case LLVMConstantVectorValueKind: return 10;
+    case LLVMUndefValueValueKind: return 11;
+    case LLVMConstantAggregateZeroValueKind: return 12;
+    case LLVMConstantDataArrayValueKind: return 13;
+    case LLVMConstantDataVectorValueKind: return 14;
+    case LLVMConstantIntValueKind: return 15;
+    case LLVMConstantFPValueKind: return 16;
+    case LLVMConstantPointerNullValueKind: return 17;
+    case LLVMConstantTokenNoneValueKind: return 18;
+    case LLVMMetadataAsValueValueKind: return 19;
+    case LLVMInlineAsmValueKind: return 20;
+    case LLVMInstructionValueKind: return 21;
+    case LLVMPoisonValueValueKind: return 22;
+    case LLVMConstantTargetNoneValueKind: return 23;
+    default: return -1;
+    }
+}
+
 API_EXPORT(int)
 LLVMPY_IsConstantExpr(LLVMValueRef V)
 {
