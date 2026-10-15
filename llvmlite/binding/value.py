@@ -44,9 +44,100 @@ class StorageClass(enum.IntEnum):
     dllexport = 2
 
 
+class TypeKind(enum.IntEnum):
+    # The LLVMTypeKind enum from llvm-c/Core.h (15 was x86_mmx, removed)
+
+    void = 0
+    half = 1
+    float = 2
+    double = 3
+    x86_fp80 = 4
+    fp128 = 5
+    ppc_fp128 = 6
+    label = 7
+    integer = 8
+    function = 9
+    struct = 10
+    array = 11
+    pointer = 12
+    vector = 13
+    metadata = 14
+    token = 16
+    scalable_vector = 17
+    bfloat = 18
+    x86_amx = 19
+    target_ext = 20
+
+
 class TypeRef(ffi.ObjectRef):
     """A weak reference to a LLVM type
     """
+    @property
+    def type_kind(self):
+        """
+        The kind of the type (TypeKind). Raises ValueError for a kind that
+        is not known.
+        """
+        kind = ffi.lib.LLVMPY_GetTypeKind(self)
+        try:
+            return TypeKind(kind)
+        except ValueError:
+            raise ValueError('unknown kind of type: %s' % (kind,))
+
+    @property
+    def type_width(self):
+        """
+        The size in bits of a primitive type (the bit width of an integer
+        type, 32 for float, 80 for x86_fp80, ...; the total size of a fixed
+        vector of these), 0 for other types (pointers, aggregates, ...).
+        These sizes do not depend on the target.
+        """
+        return ffi.lib.LLVMPY_GetTypeBitWidth(self)
+
+    @property
+    def element_count(self):
+        """
+        The number of elements of an array or a vector type (the minimal
+        number for a scalable vector). Raises ValueError for other types.
+        """
+        n = ffi.lib.LLVMPY_GetTypeElementCount(self)
+        if n < 0:
+            raise ValueError('expected an array or a vector type, got %s'
+                             % (self.type_kind.name,))
+        return n
+
+    @property
+    def return_type(self):
+        """
+        The return type of a function type. Raises ValueError for other
+        types.
+        """
+        ty = ffi.lib.LLVMPY_GetReturnType(self)
+        if not ty:
+            raise ValueError('expected a function type, got %s'
+                             % (self.type_kind.name,))
+        return TypeRef(ty)
+
+    @property
+    def is_sized(self):
+        """
+        Does the type have a size (opaque structs, functions, labels, void,
+        ... do not)?
+        """
+        return ffi.lib.LLVMPY_TypeIsSized(self)
+
+    @property
+    def address_space(self):
+        """
+        The address space of a pointer type. Raises ValueError for other
+        types.
+        """
+        n = ffi.lib.LLVMPY_GetPointerAddressSpace(self)
+        if n < 0:
+            raise ValueError('expected a pointer type, got %s'
+                             % (self.type_kind.name,))
+        return n
+
     @property
     def name(self):
         """
@@ -758,6 +849,24 @@ ffi.lib.LLVMPY_GetStructElementType.restype = ffi.LLVMTypeRef
 
 ffi.lib.LLVMPY_GetTypeName.argtypes = [ffi.LLVMTypeRef]
 ffi.lib.LLVMPY_GetTypeName.restype = c_void_p
+
+ffi.lib.LLVMPY_GetTypeKind.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_GetTypeKind.restype = c_int
+
+ffi.lib.LLVMPY_GetTypeBitWidth.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_GetTypeBitWidth.restype = c_ulonglong
+
+ffi.lib.LLVMPY_GetTypeElementCount.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_GetTypeElementCount.restype = c_longlong
+
+ffi.lib.LLVMPY_GetReturnType.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_GetReturnType.restype = ffi.LLVMTypeRef
+
+ffi.lib.LLVMPY_TypeIsSized.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_TypeIsSized.restype = c_bool
+
+ffi.lib.LLVMPY_GetPointerAddressSpace.argtypes = [ffi.LLVMTypeRef]
+ffi.lib.LLVMPY_GetPointerAddressSpace.restype = c_int
 
 ffi.lib.LLVMPY_GetDbgLine.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetDbgLine.restype = c_uint

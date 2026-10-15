@@ -248,3 +248,87 @@ class TestScalarConstants(TestCase):
         self.assertEqual(cf('pp')[0], 'ppc_fp128')
         with self.assertRaises(ValueError):
             self.init(mod, 'i8').constant_fp
+
+
+class TestTypes(TestCase):
+    ir = r"""
+    %struct.opaque_named = type { i32, ptr }
+    %struct.Opq = type opaque
+    @i = global i37 0
+    @h = global half 0.0
+    @f = global float 0.0
+    @d = global double 0.0
+    @x = global x86_fp80 0xK00000000000000000000
+    @q = global fp128 0xL00000000000000000000000000000000
+    @p = global ptr null
+    @p1 = global ptr addrspace(1) null
+    @a = global [5 x [3 x i16]] zeroinitializer
+    @v = global <4 x i32> zeroinitializer
+    @s = global %struct.opaque_named zeroinitializer
+    @o = external global %struct.Opq
+    @l = global { i8, double } zeroinitializer
+    declare { i32, i1 } @agg(i32, ...)
+    declare void @vd()
+    """
+
+    def vt(self, mod, name):
+        return mod.get_global_variable(name).global_value_type
+
+    def test_kinds(self):
+        mod = llvm.parse_assembly(self.ir)
+        K = llvm.TypeKind
+        kinds = {'i': K.integer, 'h': K.half, 'f': K.float, 'd': K.double,
+                 'x': K.x86_fp80, 'q': K.fp128, 'p': K.pointer,
+                 'p1': K.pointer, 'a': K.array, 'v': K.vector, 's': K.struct,
+                 'o': K.struct, 'l': K.struct}
+        for n, k in kinds.items():
+            self.assertEqual(self.vt(mod, n).type_kind, k, n)
+        fty = mod.get_function('agg').global_value_type
+        self.assertEqual(fty.type_kind, K.function)
+        self.assertEqual(mod.get_function('vd').global_value_type
+                         .return_type.type_kind, K.void)
+
+    def test_widths(self):
+        mod = llvm.parse_assembly(self.ir)
+        widths = {'i': 37, 'h': 16, 'f': 32, 'd': 64, 'x': 80, 'q': 128,
+                  'v': 128, 'p': 0, 'a': 0, 's': 0, 'o': 0}
+        for n, w in widths.items():
+            self.assertEqual(self.vt(mod, n).type_width, w, n)
+
+    def test_element_count(self):
+        mod = llvm.parse_assembly(self.ir)
+        a = self.vt(mod, 'a')
+        self.assertEqual(a.element_count, 5)
+        self.assertEqual(a.element_type.element_count, 3)
+        self.assertEqual(a.element_type.element_type.type_width, 16)
+        self.assertEqual(self.vt(mod, 'v').element_count, 4)
+        for n in ('i', 'p', 's'):
+            with self.assertRaises(ValueError):
+                self.vt(mod, n).element_count
+
+    def test_return_type(self):
+        mod = llvm.parse_assembly(self.ir)
+        rt = mod.get_function('agg').global_value_type.return_type
+        self.assertTrue(rt.is_struct)
+        self.assertEqual(rt.struct_num_elements, 2)
+        self.assertEqual(rt.struct_element_type(1).type_width, 1)
+        with self.assertRaises(ValueError):
+            self.vt(mod, 'i').return_type
+
+    def test_sized(self):
+        mod = llvm.parse_assembly(self.ir)
+        for n in ('i', 'h', 'x', 'p', 'a', 'v', 's', 'l'):
+            self.assertTrue(self.vt(mod, n).is_sized, n)
+        # (the name of a sized struct may contain 'opaque')
+        self.assertIn('opaque', str(self.vt(mod, 's')))
+        self.assertFalse(self.vt(mod, 'o').is_sized)
+        self.assertFalse(mod.get_function('vd').global_value_type.is_sized)
+        self.assertFalse(mod.get_function('vd').global_value_type
+                         .return_type.is_sized)
+
+    def test_address_space(self):
+        mod = llvm.parse_assembly(self.ir)
+        self.assertEqual(self.vt(mod, 'p').address_space, 0)
+        self.assertEqual(self.vt(mod, 'p1').address_space, 1)
+        with self.assertRaises(ValueError):
+            self.vt(mod, 'i').address_space

@@ -562,6 +562,63 @@ LLVMPY_GetStructElementType(LLVMTypeRef type, unsigned n)
     return nullptr;
 }
 
+/* The kind of the type (LLVMTypeKind, the numbering is part of the stable
+ * LLVM-C API, see TypeKind in value.py). */
+API_EXPORT(int)
+LLVMPY_GetTypeKind(LLVMTypeRef type)
+{
+    return (int)LLVMGetTypeKind(type);
+}
+
+/* The size in bits of a primitive type (integer, floating-point and fixed
+ * vector of these), 0 for any other type (as Type::getPrimitiveSizeInBits). */
+API_EXPORT(unsigned long long)
+LLVMPY_GetTypeBitWidth(LLVMTypeRef type)
+{
+    llvm::TypeSize Size = llvm::unwrap(type)->getPrimitiveSizeInBits();
+    if (Size.isScalable())
+        return 0;
+    return Size.getFixedValue();
+}
+
+/* The number of elements of an array or a vector type (the minimal number for
+ * scalable vectors), -1 for other types. */
+API_EXPORT(long long)
+LLVMPY_GetTypeElementCount(LLVMTypeRef type)
+{
+    llvm::Type *ty = llvm::unwrap(type);
+    if (auto *aty = llvm::dyn_cast<llvm::ArrayType>(ty))
+        return aty->getNumElements();
+    if (auto *vty = llvm::dyn_cast<llvm::VectorType>(ty))
+        return vty->getElementCount().getKnownMinValue();
+    return -1;
+}
+
+/* The return type of a function type, NULL for other types. */
+API_EXPORT(LLVMTypeRef)
+LLVMPY_GetReturnType(LLVMTypeRef type)
+{
+    if (auto *fty = llvm::dyn_cast<llvm::FunctionType>(llvm::unwrap(type)))
+        return llvm::wrap(fty->getReturnType());
+    return nullptr;
+}
+
+/* Does the type have a size (opaque structs, functions, labels, ... do not)? */
+API_EXPORT(bool)
+LLVMPY_TypeIsSized(LLVMTypeRef type)
+{
+    return llvm::unwrap(type)->isSized();
+}
+
+/* The address space of a pointer type, -1 for other types. */
+API_EXPORT(int)
+LLVMPY_GetPointerAddressSpace(LLVMTypeRef type)
+{
+    if (auto *pty = llvm::dyn_cast<llvm::PointerType>(llvm::unwrap(type)))
+        return pty->getAddressSpace();
+    return -1;
+}
+
 
 API_EXPORT(void)
 LLVMPY_SetLinkage(LLVMValueRef Val, int Linkage)
