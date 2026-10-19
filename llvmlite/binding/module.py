@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import
 from ctypes import (c_char_p, byref, POINTER, c_bool, create_string_buffer,
-                    c_size_t, c_uint, string_at)
+                    c_size_t, c_uint, c_void_p, string_at)
 
 from . import ffi
 from .linker import link_modules
@@ -68,6 +68,43 @@ def dbg_records(inst):
         ret.append((ValueRef(addr, 'instruction', inst._parents),
                     ffi.lib.LLVMPY_InstDbgRecordVar(inst, idx),
                     ffi.lib.LLVMPY_InstDbgRecordType(inst, idx)))
+    return ret
+
+
+def _dbg_loc(fun, *args):
+    line = c_uint(0)
+    col = c_uint(0)
+    n = c_size_t(0)
+    ptr = fun(*args, byref(line), byref(col), byref(n))
+    if not ptr:
+        return ('', 0, 0)
+    return (_decode_string(string_at(ptr, n.value)), line.value, col.value)
+
+
+def parse_dbg_declare_loc(inst):
+    """
+    The debug location of the call of llvm.dbg.declare/llvm.dbg.value
+    (for declare, the location of the declaration of the variable) as the
+    triple (file, line, column); ('', 0, 0) if there is none.
+    """
+    return _dbg_loc(ffi.lib.LLVMPY_ParseDbgDeclareLoc, inst)
+
+
+def dbg_records_with_loc(inst):
+    """
+    Like `dbg_records`, but the tuples have also the debug location of the
+    record (for declare, the location of the declaration of the variable):
+    (address or value, variable name, type name, (file, line, column)).
+    """
+    ret = []
+    for idx in range(ffi.lib.LLVMPY_InstDbgRecordCount(inst)):
+        addr = ffi.lib.LLVMPY_InstDbgRecordAddr(inst, idx)
+        if not addr:
+            continue
+        ret.append((ValueRef(addr, 'instruction', inst._parents),
+                    ffi.lib.LLVMPY_InstDbgRecordVar(inst, idx),
+                    ffi.lib.LLVMPY_InstDbgRecordType(inst, idx),
+                    _dbg_loc(ffi.lib.LLVMPY_InstDbgRecordLoc, inst, idx)))
     return ret
 
 
@@ -416,5 +453,14 @@ ffi.lib.LLVMPY_ParseDbgDeclareVar.restype = c_char_p
 
 ffi.lib.LLVMPY_ParseDbgDeclareType.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_ParseDbgDeclareType.restype = c_char_p
+
+ffi.lib.LLVMPY_ParseDbgDeclareLoc.argtypes = [
+    ffi.LLVMValueRef, POINTER(c_uint), POINTER(c_uint), POINTER(c_size_t)]
+ffi.lib.LLVMPY_ParseDbgDeclareLoc.restype = c_void_p
+
+ffi.lib.LLVMPY_InstDbgRecordLoc.argtypes = [
+    ffi.LLVMValueRef, c_size_t, POINTER(c_uint), POINTER(c_uint),
+    POINTER(c_size_t)]
+ffi.lib.LLVMPY_InstDbgRecordLoc.restype = c_void_p
 
 

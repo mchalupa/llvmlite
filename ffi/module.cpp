@@ -260,6 +260,47 @@ LLVMPY_InstDbgRecordType(LLVMValueRef I, size_t idx)
     return buf.c_str();
 }
 
+/*
+ * The debug location of a llvm.dbg.declare/llvm.dbg.value (the location of
+ * the declaration of the variable for declare): sets the line and the column
+ * and returns the file name (FileLen is its length), null if there is none.
+ */
+static const char *
+dbgLocOf(const llvm::DebugLoc &D, unsigned *Line, unsigned *Col,
+         size_t *FileLen)
+{
+    *Line = *Col = 0;
+    *FileLen = 0;
+    if (!D)
+        return nullptr;
+    *Line = D.getLine();
+    *Col = D.getCol();
+    llvm::StringRef File = D.get()->getFilename();
+    *FileLen = File.size();
+    return File.data();
+}
+
+API_EXPORT(const char *)
+LLVMPY_ParseDbgDeclareLoc(LLVMValueRef I, unsigned *Line, unsigned *Col,
+                          size_t *FileLen)
+{
+    using namespace llvm;
+    if (auto *DD = dyn_cast<DbgVariableIntrinsic>(llvm::unwrap<Value>(I)))
+        return dbgLocOf(DD->getDebugLoc(), Line, Col, FileLen);
+    return dbgLocOf(DebugLoc(), Line, Col, FileLen);
+}
+
+API_EXPORT(const char *)
+LLVMPY_InstDbgRecordLoc(LLVMValueRef I, size_t idx, unsigned *Line,
+                        unsigned *Col, size_t *FileLen)
+{
+#if LLVM_VERSION_MAJOR >= 19
+    if (auto *DVR = getDbgVariableRecord(I, idx))
+        return dbgLocOf(DVR->getDebugLoc(), Line, Col, FileLen);
+#endif
+    return dbgLocOf(llvm::DebugLoc(), Line, Col, FileLen);
+}
+
 API_EXPORT(LLVMValueRef)
 LLVMPY_GetNamedFunction(LLVMModuleRef M,
                         const char *Name)
