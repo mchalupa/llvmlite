@@ -6,6 +6,7 @@
 #include "llvm/IR/TypeFinder.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/Config/llvm-config.h"
 #include "core.h"
 
 
@@ -181,7 +182,10 @@ LLVMPY_ParseDbgDeclareType(LLVMValueRef I)
  * Debug records are not instructions: they are attached to the
  * instruction that follows them. These functions give access to the
  * llvm.dbg.declare/llvm.dbg.value records attached to an instruction.
+ * Before LLVM 19, there are no debug records, the debug information are
+ * calls of the llvm.dbg.* intrinsics (see LLVMPY_ParseDbgDeclare*).
  */
+#if LLVM_VERSION_MAJOR >= 19
 static const llvm::DbgVariableRecord *
 getDbgVariableRecord(LLVMValueRef I, size_t idx)
 {
@@ -199,18 +203,21 @@ getDbgVariableRecord(LLVMValueRef I, size_t idx)
     }
     return nullptr;
 }
+#endif
 
 API_EXPORT(size_t)
 LLVMPY_InstDbgRecordCount(LLVMValueRef I)
 {
+    size_t n = 0;
+#if LLVM_VERSION_MAJOR >= 19
     using namespace llvm;
     auto *Inst = dyn_cast<Instruction>(unwrap<Value>(I));
-    size_t n = 0;
     if (Inst)
         for (DbgRecord &R : Inst->getDbgRecordRange())
             if (auto *DVR = dyn_cast<DbgVariableRecord>(&R))
                 if (DVR->isDbgDeclare() || DVR->isDbgValue())
                     ++n;
+#endif
     return n;
 }
 
@@ -218,9 +225,11 @@ LLVMPY_InstDbgRecordCount(LLVMValueRef I)
 API_EXPORT(LLVMValueRef)
 LLVMPY_InstDbgRecordAddr(LLVMValueRef I, size_t idx)
 {
+#if LLVM_VERSION_MAJOR >= 19
     if (auto *DVR = getDbgVariableRecord(I, idx))
         if (DVR->getNumVariableLocationOps() == 1)
             return llvm::wrap(DVR->getVariableLocationOp(0));
+#endif
     return nullptr;
 }
 
@@ -229,9 +238,11 @@ LLVMPY_InstDbgRecordVar(LLVMValueRef I, size_t idx)
 {
     static thread_local std::string buf;
     buf.clear();
+#if LLVM_VERSION_MAJOR >= 19
     if (auto *DVR = getDbgVariableRecord(I, idx))
         if (auto *Var = DVR->getVariable())
             buf = Var->getName().str();
+#endif
     return buf.c_str();
 }
 
@@ -240,10 +251,12 @@ LLVMPY_InstDbgRecordType(LLVMValueRef I, size_t idx)
 {
     static thread_local std::string buf;
     buf.clear();
+#if LLVM_VERSION_MAJOR >= 19
     if (auto *DVR = getDbgVariableRecord(I, idx))
         if (auto *Var = DVR->getVariable())
             if (auto *Ty = Var->getType())
                 buf = Ty->getName().str();
+#endif
     return buf.c_str();
 }
 

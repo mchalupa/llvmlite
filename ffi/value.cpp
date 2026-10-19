@@ -7,6 +7,7 @@
 // the following is needed for WriteGraph()
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Support/GraphWriter.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InlineAsm.h"
@@ -1001,7 +1002,7 @@ LLVMPY_GetInlineAsmString(LLVMValueRef V)
 {
     using namespace llvm;
     if (auto *IA = dyn_cast<InlineAsm>(unwrap<Value>(V)))
-        return LLVMPY_CreateString(IA->getAsmString().str().c_str());
+        return LLVMPY_CreateString(std::string(IA->getAsmString()).c_str());
     return nullptr;
 }
 
