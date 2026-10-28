@@ -447,6 +447,26 @@ LLVMPY_GetDbgLoc(LLVMValueRef Val, unsigned *Line, unsigned *Col,
     return nullptr;
 }
 
+/* The integer of the metadata `Kind` of an instruction that is `!{iN V}`:
+ * *Out is set to V and 1 is returned; 0 if the instruction has no such
+ * metadata (or this is not an instruction). */
+API_EXPORT(int)
+LLVMPY_GetMetadataInt(LLVMValueRef Val, const char *Kind, int64_t *Out)
+{
+    using namespace llvm;
+    auto *I = dyn_cast<Instruction>(unwrap<Value>(Val));
+    if (!I)
+        return 0;
+    MDNode *MD = I->getMetadata(Kind);
+    if (!MD || MD->getNumOperands() != 1)
+        return 0;
+    auto *C = mdconst::dyn_extract<ConstantInt>(MD->getOperand(0));
+    if (!C)
+        return 0;
+    *Out = C->getSExtValue();
+    return 1;
+}
+
 API_EXPORT(void)
 LLVMPY_SetValueName(LLVMValueRef Val, const char *Name)
 {

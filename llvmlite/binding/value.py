@@ -1,4 +1,4 @@
-from ctypes import (POINTER, byref, c_char_p, c_int, c_longlong, c_size_t,
+from ctypes import (POINTER, byref, c_char_p, c_int, c_int64, c_longlong, c_size_t,
                     c_uint, c_ulonglong, c_bool, c_void_p, string_at)
 import enum
 
@@ -352,6 +352,17 @@ class ValueRef(ffi.ObjectRef):
             return ('', 0, 0)
         return (_decode_string(string_at(ptr, n.value)), line.value,
                 col.value)
+
+    def metadata_int(self, kind):
+        """
+        The integer V of the metadata `kind` of an instruction that is
+        `!{iN V}` (sign-extended), None if there is no such metadata (or
+        this is not an instruction).
+        """
+        out = c_int64(0)
+        if ffi.lib.LLVMPY_GetMetadataInt(self, _encode_string(kind), byref(out)):
+            return out.value
+        return None
 
     @name.setter
     def name(self, val):
@@ -1202,6 +1213,10 @@ ffi.lib.LLVMPY_StripPointerCasts.restype = ffi.LLVMValueRef
 ffi.lib.LLVMPY_GetDbgLoc.argtypes = [ffi.LLVMValueRef, POINTER(c_uint),
                                     POINTER(c_uint), POINTER(c_size_t)]
 ffi.lib.LLVMPY_GetDbgLoc.restype = c_void_p
+
+ffi.lib.LLVMPY_GetMetadataInt.argtypes = [ffi.LLVMValueRef, c_char_p,
+                                         POINTER(c_int64)]
+ffi.lib.LLVMPY_GetMetadataInt.restype = c_int
 
 ffi.lib.LLVMPY_GetAtomicRMWOperation.argtypes = [ffi.LLVMValueRef]
 ffi.lib.LLVMPY_GetAtomicRMWOperation.restype = c_void_p
